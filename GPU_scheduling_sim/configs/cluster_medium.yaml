@@ -1,0 +1,26 @@
+name: cluster_medium
+nodes:
+  - id: 0
+    type: A100_80GB
+    gpu_count: 4
+    vram_gb: 80
+    cpu_cores: 64
+    ram_gb: 256
+  - id: 1
+    type: A100_40GB
+    gpu_count: 8
+    vram_gb: 40
+    cpu_cores: 64
+    ram_gb: 256
+  - id: 2
+    type: H100_80GB
+    gpu_count: 4
+    vram_gb: 80
+    cpu_cores: 64
+    ram_gb: 256
+  - id: 3
+    type: A10_24GB
+    gpu_count: 8
+    vram_gb: 24
+    cpu_cores: 64
+    ram_gb: 256

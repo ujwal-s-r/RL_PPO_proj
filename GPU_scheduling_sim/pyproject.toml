@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gpu-scheduling-sim"
+version = "0.1.0"
+description = "PPO-based GPU Cluster Resource Scheduler with Discrete-Event Simulation & OpenEnv"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "gymnasium>=0.29.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.65.0",
+    "pytest>=7.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.3.0",
+    "black>=23.0.0",
+    "ruff>=0.0.280",
+    "ipykernel>=6.25.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["simulator*", "workloads*", "env*", "baselines*", "rl*", "evaluation*", "api*"]

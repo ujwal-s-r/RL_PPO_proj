@@ -1,0 +1,11 @@
+name: gpu-scheduler-env
+version: 0.1.0
+description: Heterogeneous GPU Cluster Resource Allocation Environment for RL Scheduling
+entrypoint: env.server.app:app
+environment_class: env.server.gpu_scheduler_environment:GPUSchedulerEnvironment
+action_space:
+  type: Discrete
+  description: Index of (job_index, node_index) pair to place on cluster
+observation_space:
+  type: Box
+  description: Normalized node states, padded queue states, and cluster global metrics
