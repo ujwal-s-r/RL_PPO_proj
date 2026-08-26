@@ -12,8 +12,9 @@ if __name__ == "__main__":
     from tests.test_cluster import test_cluster_initialization, test_cluster_invariants_during_execution
     from tests.test_queue import test_queue_push_pop
     from tests.test_simulator import test_simulator_basic_flow
+    from tests.test_workloads import test_seed_determinism, test_all_scenarios_generation
 
-    print("Running Simulator Unit Tests...")
+    print("Running Simulator & Workload Unit Tests...")
     
     test_gpu_lifecycle()
     print("[PASS] test_gpu_lifecycle")
@@ -33,4 +34,10 @@ if __name__ == "__main__":
     test_simulator_basic_flow()
     print("[PASS] test_simulator_basic_flow")
 
-    print("\nAll 6 tests passed successfully!")
+    test_seed_determinism()
+    print("[PASS] test_seed_determinism")
+
+    test_all_scenarios_generation()
+    print("[PASS] test_all_scenarios_generation")
+
+    print("\nAll 8 tests passed successfully!")
