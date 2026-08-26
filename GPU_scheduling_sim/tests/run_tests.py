@@ -32,8 +32,12 @@ if __name__ == "__main__":
         test_checkpoint_save_and_load,
         test_ppo_single_update,
     )
+    from tests.test_evaluation import (
+        test_ppo_policy_scheduler_inference,
+        test_evaluator_with_ppo,
+    )
 
-    print("Running Complete Test Suite (Phases 1-5)...")
+    print("Running Complete Test Suite (Phases 1-6)...")
     
     test_gpu_lifecycle()
     print("[PASS] test_gpu_lifecycle")
@@ -98,4 +102,10 @@ if __name__ == "__main__":
     test_ppo_single_update()
     print("[PASS] test_ppo_single_update")
 
-    print("\nAll 21 tests passed successfully!")
+    test_ppo_policy_scheduler_inference()
+    print("[PASS] test_ppo_policy_scheduler_inference")
+
+    test_evaluator_with_ppo()
+    print("[PASS] test_evaluator_with_ppo")
+
+    print("\nAll 23 tests passed successfully!")

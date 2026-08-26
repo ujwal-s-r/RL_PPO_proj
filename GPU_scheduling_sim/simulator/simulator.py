@@ -189,6 +189,20 @@ class Simulator:
         # No more events remaining in queue
         return True, step_completed_jobs
 
+    def peek_next_arrival(self) -> Tuple[float, float, float]:
+        """
+        Inspect the event queue for the next upcoming job arrival.
+        
+        Returns:
+            (time_until_arrival_sec, gpu_count, vram_per_gpu_gb).
+            If no upcoming arrival exists, returns (3600.0, 0.0, 0.0).
+        """
+        for event in self.event_queue._heap:
+            if event.event_type == EventType.JOB_ARRIVAL and event.job is not None:
+                dt = max(0.0, event.timestamp - self.current_time)
+                return dt, float(event.job.gpu_count), float(event.job.vram_per_gpu_gb)
+        return 3600.0, 0.0, 0.0
+
     def get_state(self) -> SchedulerState:
         """Generate snapshot of current scheduler state."""
         return SchedulerState(

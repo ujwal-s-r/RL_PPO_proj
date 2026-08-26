@@ -124,9 +124,20 @@ def get_scenario(name: str) -> WorkloadConfig:
     return SCENARIOS[name]
 
 
+# Canonical scenario list
+CANONICAL_SCENARIOS = [
+    "balanced",
+    "training_heavy",
+    "short_job_heavy",
+    "bursty",
+    "gpu_fragmentation",
+    "high_load",
+]
+
+
 def list_scenarios() -> List[str]:
-    """List all available scenario names."""
-    return list(SCENARIOS.keys())
+    """List all 6 canonical benchmark scenario names."""
+    return list(CANONICAL_SCENARIOS)
 
 
 def create_scenario_workload(name: str, seed: int = 42):

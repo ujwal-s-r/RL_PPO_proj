@@ -49,9 +49,23 @@ def generate_comparison_dataframe(
 
 
 def format_markdown_table(df: pd.DataFrame, title: str = "") -> str:
-    """Format DataFrame as GitHub Markdown table."""
+    """Format DataFrame as GitHub Markdown table using pure Python string formatting."""
     md_lines = []
     if title:
         md_lines.append(f"### {title}\n")
-    md_lines.append(df.to_markdown(index=False))
+
+    headers = [str(c) for c in df.columns]
+    col_widths = [max(len(str(val)) for val in [h] + list(df[col])) for h, col in zip(headers, df.columns)]
+
+    # Header row
+    header_row = "| " + " | ".join(f"{h:<{w}}" for h, w in zip(headers, col_widths)) + " |"
+    sep_row = "| " + " | ".join("-" * w for w in col_widths) + " |"
+    md_lines.append(header_row)
+    md_lines.append(sep_row)
+
+    # Data rows
+    for _, row in df.iterrows():
+        row_str = "| " + " | ".join(f"{str(val):<{w}}" for val, w in zip(row, col_widths)) + " |"
+        md_lines.append(row_str)
+
     return "\n".join(md_lines)
