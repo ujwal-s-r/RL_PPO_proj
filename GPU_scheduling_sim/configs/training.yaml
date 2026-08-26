@@ -23,7 +23,7 @@ num_envs: 8            # Parallel environment workers
 rollout_length: 256    # Steps per env per rollout (total batch = num_envs * rollout_length = 2048)
 minibatch_size: 128
 epochs_per_update: 10
-total_timesteps: 200000
+total_timesteps: 500000
 
 # Network Architecture
 hidden_dim: 256

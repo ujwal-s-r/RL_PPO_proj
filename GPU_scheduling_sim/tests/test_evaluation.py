@@ -9,15 +9,17 @@ from simulator.simulator import Simulator
 from simulator.job import Job
 from evaluation.ppo_policy import PPOPolicyScheduler
 from evaluation.evaluator import Evaluator
+from env.server.gpu_scheduler_environment import GPUSchedulerEnvironment
 from rl.config import PPOConfig
 from rl.ppo import PPO
 
 
 def test_ppo_policy_scheduler_inference():
-    # Save a temporary checkpoint
+    # Save a temporary checkpoint matching current environment dimensions
     ckpt_path = "checkpoints/test_eval_ckpt.pt"
+    temp_env = GPUSchedulerEnvironment(cluster_config_path="configs/cluster_small.yaml")
     cfg = PPOConfig(hidden_dim=64, device="cpu")
-    ppo = PPO(cfg, obs_dim=164, action_dim=32)
+    ppo = PPO(cfg, obs_dim=temp_env.obs_dim, action_dim=temp_env.action_dim)
     ppo.save_checkpoint(ckpt_path)
 
     # Initialize policy scheduler from checkpoint
