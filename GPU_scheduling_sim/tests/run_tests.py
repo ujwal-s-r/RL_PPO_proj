@@ -13,8 +13,21 @@ if __name__ == "__main__":
     from tests.test_queue import test_queue_push_pop
     from tests.test_simulator import test_simulator_basic_flow
     from tests.test_workloads import test_seed_determinism, test_all_scenarios_generation
+    from tests.test_environment import (
+        test_env_reset_and_obs_shape,
+        test_env_step_valid_and_invalid,
+        test_env_seed_determinism,
+        test_openenv_client_flow,
+    )
+    from tests.test_baselines import (
+        test_fifo_logic,
+        test_sjf_logic,
+        test_priority_logic,
+        test_best_fit_logic,
+        test_baseline_runner_episode,
+    )
 
-    print("Running Simulator & Workload Unit Tests...")
+    print("Running Simulator, Workload, Environment & Baseline Unit Tests...")
     
     test_gpu_lifecycle()
     print("[PASS] test_gpu_lifecycle")
@@ -40,4 +53,31 @@ if __name__ == "__main__":
     test_all_scenarios_generation()
     print("[PASS] test_all_scenarios_generation")
 
-    print("\nAll 8 tests passed successfully!")
+    test_env_reset_and_obs_shape()
+    print("[PASS] test_env_reset_and_obs_shape")
+
+    test_env_step_valid_and_invalid()
+    print("[PASS] test_env_step_valid_and_invalid")
+
+    test_env_seed_determinism()
+    print("[PASS] test_env_seed_determinism")
+
+    test_openenv_client_flow()
+    print("[PASS] test_openenv_client_flow")
+
+    test_fifo_logic()
+    print("[PASS] test_fifo_logic")
+
+    test_sjf_logic()
+    print("[PASS] test_sjf_logic")
+
+    test_priority_logic()
+    print("[PASS] test_priority_logic")
+
+    test_best_fit_logic()
+    print("[PASS] test_best_fit_logic")
+
+    test_baseline_runner_episode()
+    print("[PASS] test_baseline_runner_episode")
+
+    print("\nAll 17 tests passed successfully!")
