@@ -36,8 +36,16 @@ if __name__ == "__main__":
         test_ppo_policy_scheduler_inference,
         test_evaluator_with_ppo,
     )
+    from tests.test_api import (
+        test_api_health,
+        test_api_policies_and_scenarios,
+        test_api_cluster_status,
+        test_api_job_submission,
+        test_api_schedule_step_ppo,
+        test_api_cluster_reset,
+    )
 
-    print("Running Complete Test Suite (Phases 1-6)...")
+    print("Running Complete Test Suite (Phases 1-7)...")
     
     test_gpu_lifecycle()
     print("[PASS] test_gpu_lifecycle")
@@ -108,4 +116,27 @@ if __name__ == "__main__":
     test_evaluator_with_ppo()
     print("[PASS] test_evaluator_with_ppo")
 
-    print("\nAll 23 tests passed successfully!")
+    # API Tests
+    from fastapi.testclient import TestClient
+    from api.app import app
+    test_client = TestClient(app)
+
+    test_api_health(test_client)
+    print("[PASS] test_api_health")
+
+    test_api_policies_and_scenarios(test_client)
+    print("[PASS] test_api_policies_and_scenarios")
+
+    test_api_cluster_status(test_client)
+    print("[PASS] test_api_cluster_status")
+
+    test_api_job_submission(test_client)
+    print("[PASS] test_api_job_submission")
+
+    test_api_schedule_step_ppo(test_client)
+    print("[PASS] test_api_schedule_step_ppo")
+
+    test_api_cluster_reset(test_client)
+    print("[PASS] test_api_cluster_reset")
+
+    print("\nAll 29 tests across all 7 Phases passed successfully!")
