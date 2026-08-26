@@ -3,42 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPU Cluster Scheduler — AI Resource Management</title>
+    <title>GPU Cluster Scheduler — Visual Resource Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- Top Navbar -->
-    <header class="navbar">
-        <div class="nav-brand">
-            <div class="logo-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+    <!-- Top App Bar -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="brand-badge">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2"></rect>
                     <line x1="6" y1="6" x2="6.01" y2="6"></line>
                     <line x1="6" y1="18" x2="6.01" y2="18"></line>
                 </svg>
+                <span>GPU Cluster Visualizer</span>
             </div>
-            <div>
-                <h1>GPU Cluster Scheduler</h1>
-                <span class="sub-brand">Reinforcement Learning & Classical Heuristics</span>
+
+            <div class="sim-clock">
+                <span class="clock-label">Sim Time</span>
+                <span class="clock-val" id="sim-time">0.0s</span>
             </div>
-            <span class="badge live-badge"><span class="pulse-dot"></span> LIVE SIMULATOR</span>
+
+            <div class="cluster-summary-chip" id="cluster-summary-chip">
+                <span class="dot-active"></span> 0 / 8 GPUs Active
+            </div>
         </div>
 
-        <div class="nav-controls">
-            <!-- Sim Time -->
-            <div class="control-pill time-pill">
-                <span class="pill-label">Sim Time</span>
-                <span class="pill-value" id="sim-time">0.0s</span>
-            </div>
-
-            <!-- Policy Selector -->
-            <div class="control-group">
-                <label for="policy-select">Policy</label>
-                <select id="policy-select" class="styled-select">
+        <div class="header-right">
+            <div class="select-wrapper">
+                <label>Policy</label>
+                <select id="policy-select">
                     <option value="PPO" selected>⚡ PPO (Deep RL)</option>
                     <option value="SJF">⏱️ Shortest Job First</option>
                     <option value="BestFit">📦 Best-Fit Bin-Pack</option>
@@ -47,10 +45,9 @@
                 </select>
             </div>
 
-            <!-- Scenario Selector -->
-            <div class="control-group">
-                <label for="scenario-select">Scenario</label>
-                <select id="scenario-select" class="styled-select">
+            <div class="select-wrapper">
+                <label>Scenario</label>
+                <select id="scenario-select">
                     <option value="balanced" selected>Balanced Traffic</option>
                     <option value="training_heavy">Training Heavy (8-GPU)</option>
                     <option value="short_job_heavy">Short Jobs & Inference</option>
@@ -60,226 +57,114 @@
                 </select>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="btn-group">
-                <button id="btn-step" class="btn btn-primary" title="Execute 1 Scheduling Decision (Spacebar)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
+            <div class="controls-group">
+                <button id="btn-step" class="btn btn-primary" title="Execute 1 Scheduling Step (Spacebar)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                     Step
                 </button>
-                <button id="btn-auto" class="btn btn-secondary" title="Continuous Auto-Simulation">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polygon points="10 8 16 12 10 16 10 8"></polygon>
-                    </svg>
-                    <span id="auto-text">Auto Play</span>
+                <button id="btn-auto" class="btn btn-secondary">
+                    <span id="auto-text">Auto Play ▶</span>
                 </button>
-                <button id="btn-reset" class="btn btn-ghost" title="Reset Simulation">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
-                    </svg>
+                <button id="btn-reset" class="btn btn-icon" title="Reset Simulation">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
                 </button>
             </div>
         </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="dashboard-container">
-        <!-- Top Metrics HUD -->
-        <section class="hud-grid">
-            <div class="hud-card">
-                <div class="hud-header">
-                    <span>GPU Utilization</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+    <!-- Main Workspace -->
+    <main class="main-layout">
+        <!-- Left 65%: Cluster Diagram Visualizer -->
+        <section class="topology-section">
+            <div class="section-title-bar">
+                <div>
+                    <h2>Cluster Topology & Node Hierarchy</h2>
+                    <p class="section-desc">Physical server chassis view with real-time VRAM allocation and active GPU slots</p>
                 </div>
-                <div class="hud-body">
-                    <span class="hud-value highlight-cyan" id="metric-gpu-util">0.0%</span>
-                    <span class="hud-sub" id="metric-gpu-counts">0 / 8 GPUs Active</span>
+                <div class="cluster-quick-stats">
+                    <div class="stat-pill"><span class="stat-num" id="stat-gpu-util">0%</span> GPU Load</div>
+                    <div class="stat-pill"><span class="stat-num" id="stat-throughput">0</span> Jobs/hr</div>
+                    <div class="stat-pill"><span class="stat-num" id="stat-completed">0</span> Completed</div>
                 </div>
-                <div class="progress-bar-bg"><div class="progress-bar-fill fill-cyan" id="bar-gpu-util" style="width: 0%;"></div></div>
             </div>
 
-            <div class="hud-card">
-                <div class="hud-header">
-                    <span>VRAM Allocated</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-                </div>
-                <div class="hud-body">
-                    <span class="hud-value highlight-purple" id="metric-vram-util">0.0%</span>
-                    <span class="hud-sub" id="metric-vram-counts">0 GB / 256 GB</span>
-                </div>
-                <div class="progress-bar-bg"><div class="progress-bar-fill fill-purple" id="bar-vram-util" style="width: 0%;"></div></div>
-            </div>
-
-            <div class="hud-card">
-                <div class="hud-header">
-                    <span>Throughput</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-                </div>
-                <div class="hud-body">
-                    <span class="hud-value highlight-emerald" id="metric-throughput">0.0</span>
-                    <span class="hud-sub">Jobs / Hour</span>
-                </div>
-                <div class="hud-footer-badge text-emerald">Active Serving</div>
-            </div>
-
-            <div class="hud-card">
-                <div class="hud-header">
-                    <span>Completed Jobs</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                </div>
-                <div class="hud-body">
-                    <span class="hud-value" id="metric-completed">0</span>
-                    <span class="hud-sub" id="metric-jct">Mean JCT: 0.0s</span>
-                </div>
-                <div class="hud-footer-badge">Zero Stranded Units</div>
-            </div>
-
-            <div class="hud-card">
-                <div class="hud-header">
-                    <span>Deadline Miss Rate</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
-                </div>
-                <div class="hud-body">
-                    <span class="hud-value highlight-amber" id="metric-deadline-miss">0.0%</span>
-                    <span class="hud-sub">SLA Violations</span>
-                </div>
-                <div class="progress-bar-bg"><div class="progress-bar-fill fill-amber" id="bar-deadline" style="width: 0%;"></div></div>
+            <!-- Hierarchical Node Chassis List -->
+            <div class="nodes-diagram-grid" id="nodes-container">
+                <!-- Dynamically rendered physical server chassis cards -->
             </div>
         </section>
 
-        <!-- Main Workspace Columns -->
-        <div class="workspace-grid">
-            <!-- Left: Cluster Topology -->
-            <section class="panel cluster-panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-                        <h2>Heterogeneous GPU Cluster Topology</h2>
+        <!-- Right 35%: Visual Job Queue & Fast Injection -->
+        <aside class="sidebar-section">
+            <!-- Fast Custom Job Submission -->
+            <div class="card inject-card">
+                <div class="card-header">
+                    <h3>➕ Inject Custom Job</h3>
+                    <span class="tag-live">Interactive</span>
+                </div>
+                <form id="job-form" class="inject-form">
+                    <div class="input-grid">
+                        <div class="input-cell">
+                            <label>GPUs</label>
+                            <select id="job-gpu-count">
+                                <option value="1">1 GPU</option>
+                                <option value="2" selected>2 GPUs</option>
+                                <option value="4">4 GPUs</option>
+                                <option value="8">8 GPUs</option>
+                            </select>
+                        </div>
+                        <div class="input-cell">
+                            <label>VRAM / GPU</label>
+                            <select id="job-vram">
+                                <option value="16.0">16 GB</option>
+                                <option value="24.0" selected>24 GB (A10)</option>
+                                <option value="40.0">40 GB (A100)</option>
+                                <option value="80.0">80 GB (H100)</option>
+                            </select>
+                        </div>
                     </div>
-                    <span class="cluster-stats-pill" id="cluster-summary-pill">2 Nodes · 8 GPUs Total</span>
-                </div>
-                <div class="nodes-container" id="nodes-container">
-                    <!-- Dynamic Node Cards Inserted Here -->
-                </div>
-            </section>
-
-            <!-- Right: Interactive Job Submission & Queue -->
-            <section class="panel queue-panel">
-                <!-- Custom Job Submission Accordion -->
-                <div class="submission-card">
-                    <div class="submission-header" id="toggle-submission">
-                        <div class="panel-title">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                            <h3>Inject Interactive Custom Job</h3>
+                    <div class="input-grid">
+                        <div class="input-cell">
+                            <label>Duration (s)</label>
+                            <input type="number" id="job-runtime" value="120" min="5" max="3600">
                         </div>
-                        <span class="badge badge-accent">Live Inference</span>
+                        <div class="input-cell">
+                            <label>Type</label>
+                            <select id="job-type">
+                                <option value="training" selected>Training</option>
+                                <option value="fine_tuning">Fine-Tuning</option>
+                                <option value="inference">Inference</option>
+                            </select>
+                        </div>
                     </div>
-
-                    <form id="job-form" class="submission-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="job-gpu-count">GPU Count</label>
-                                <select id="job-gpu-count" class="styled-input">
-                                    <option value="1">1 GPU</option>
-                                    <option value="2" selected>2 GPUs</option>
-                                    <option value="4">4 GPUs</option>
-                                    <option value="8">8 GPUs</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="job-vram">VRAM / GPU</label>
-                                <select id="job-vram" class="styled-input">
-                                    <option value="16.0">16 GB</option>
-                                    <option value="24.0" selected>24 GB (A10)</option>
-                                    <option value="40.0">40 GB (A100)</option>
-                                    <option value="80.0">80 GB (H100/A100)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="job-runtime">Estimated Duration (sec)</label>
-                                <input type="number" id="job-runtime" class="styled-input" value="120" min="5" max="3600">
-                            </div>
-                            <div class="form-group">
-                                <label for="job-priority">Priority (1-10)</label>
-                                <input type="number" id="job-priority" class="styled-input" value="7" min="1" max="10">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="job-type">Workload Type</label>
-                                <select id="job-type" class="styled-input">
-                                    <option value="training" selected>Training (Pre-training / LoRA)</option>
-                                    <option value="fine_tuning">Fine-Tuning</option>
-                                    <option value="inference">Inference (vLLM / Triton)</option>
-                                    <option value="evaluation">Evaluation Sweep</option>
-                                    <option value="experiment">Experiment</option>
-                                </select>
-                            </div>
-                            <div class="form-group btn-submit-cell">
-                                <button type="submit" class="btn btn-accent btn-full">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                                    Submit Job
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Live Queue Table -->
-                <div class="queue-section">
-                    <div class="panel-header queue-header">
-                        <div class="panel-title">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-                            <h3>Active Job Queue (<span id="queue-count">0</span>)</h3>
-                        </div>
-                        <span class="text-muted small" id="queue-wait-summary">Mean Wait: 0.0s</span>
-                    </div>
-
-                    <div class="table-wrapper">
-                        <table class="queue-table">
-                            <thead>
-                                <tr>
-                                    <th>Slot</th>
-                                    <th>Job ID</th>
-                                    <th>Type</th>
-                                    <th>GPUs</th>
-                                    <th>VRAM</th>
-                                    <th>Duration</th>
-                                    <th>Priority</th>
-                                    <th>Wait Time</th>
-                                </tr>
-                            </thead>
-                            <tbody id="queue-tbody">
-                                <tr>
-                                    <td colspan="8" class="text-center text-muted">Queue is currently empty.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        </div>
-
-        <!-- Bottom: Live Decision Logs & Console -->
-        <section class="panel console-panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                    <h3>Live Placement Decision Feed</h3>
-                </div>
-                <button class="btn btn-xs btn-ghost" id="btn-clear-logs">Clear Feed</button>
+                    <button type="submit" class="btn btn-inject">
+                        Submit Job to Queue
+                    </button>
+                </form>
             </div>
-            <div class="console-logs" id="console-logs">
-                <div class="log-entry system"><span class="log-time">[0.0s]</span> System initialized. Connect to FastAPI backend.</div>
+
+            <!-- Visual Job Queue Cards -->
+            <div class="card queue-card">
+                <div class="card-header">
+                    <h3>📥 Waiting Queue (<span id="queue-count">0</span>)</h3>
+                    <span class="text-muted small" id="queue-mean-wait">Avg Wait: 0.0s</span>
+                </div>
+
+                <div class="queue-cards-list" id="queue-container">
+                    <!-- Dynamic Job Cards -->
+                    <div class="empty-queue-msg">Queue is empty.</div>
+                </div>
             </div>
-        </section>
+        </aside>
     </main>
+
+    <!-- Bottom: Recent Decision Banner -->
+    <footer class="decision-footer">
+        <div class="decision-pill">
+            <span class="decision-icon">🎯</span>
+            <span class="decision-text" id="latest-decision-text">Simulation ready. Click "Step" or press Spacebar to start scheduling.</span>
+        </div>
+    </footer>
 
     <script src="/static/app.js"></script>
 </body>

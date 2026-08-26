@@ -1,44 +1,32 @@
 /**
- * GPU Cluster Scheduler — Real-Time Interactive Frontend Controller
+ * GPU Cluster Visualizer — Diagrammatic Frontend Controller
  */
 
 const API_BASE = window.location.origin;
 
 let autoPlayInterval = null;
 let isAutoPlaying = false;
+let lastScheduledNodeId = null;
 
 // DOM Elements
 const simTimeEl = document.getElementById("sim-time");
+const clusterSummaryChip = document.getElementById("cluster-summary-chip");
 const policySelect = document.getElementById("policy-select");
 const scenarioSelect = document.getElementById("scenario-select");
 const btnStep = document.getElementById("btn-step");
 const btnAuto = document.getElementById("btn-auto");
 const autoText = document.getElementById("auto-text");
 const btnReset = document.getElementById("btn-reset");
-const btnClearLogs = document.getElementById("btn-clear-logs");
 
-const metricGpuUtil = document.getElementById("metric-gpu-util");
-const metricGpuCounts = document.getElementById("metric-gpu-counts");
-const barGpuUtil = document.getElementById("bar-gpu-util");
-
-const metricVramUtil = document.getElementById("metric-vram-util");
-const metricVramCounts = document.getElementById("metric-vram-counts");
-const barVramUtil = document.getElementById("bar-vram-util");
-
-const metricThroughput = document.getElementById("metric-throughput");
-const metricCompleted = document.getElementById("metric-completed");
-const metricJct = document.getElementById("metric-jct");
-const metricDeadlineMiss = document.getElementById("metric-deadline-miss");
-const barDeadline = document.getElementById("bar-deadline");
+const statGpuUtil = document.getElementById("stat-gpu-util");
+const statThroughput = document.getElementById("stat-throughput");
+const statCompleted = document.getElementById("stat-completed");
 
 const nodesContainer = document.getElementById("nodes-container");
-const clusterSummaryPill = document.getElementById("cluster-summary-pill");
-
 const queueCountEl = document.getElementById("queue-count");
-const queueWaitSummary = document.getElementById("queue-wait-summary");
-const queueTbody = document.getElementById("queue-tbody");
-
-const consoleLogs = document.getElementById("console-logs");
+const queueMeanWait = document.getElementById("queue-mean-wait");
+const queueContainer = document.getElementById("queue-container");
+const latestDecisionText = document.getElementById("latest-decision-text");
 const jobForm = document.getElementById("job-form");
 
 // --- API Calls ---
@@ -64,6 +52,13 @@ async function stepSimulation() {
             body: JSON.stringify({ policy: policy, auto_advance: true }),
         });
         const result = await res.json();
+        if (result.action_taken && result.node_id !== undefined) {
+            lastScheduledNodeId = result.node_id;
+            latestDecisionText.innerHTML = `<strong>[${policy}]</strong> Scheduled <strong>Job #${result.job_id}</strong> on <strong>Node ${result.node_id}</strong> (Sim Time: ${result.sim_time.toFixed(1)}s)`;
+        } else {
+            lastScheduledNodeId = null;
+            latestDecisionText.textContent = `[${policy}] Advanced time to ${result.sim_time.toFixed(1)}s (no placement needed).`;
+        }
         await fetchStatus();
     } catch (err) {
         console.error("Step error:", err);
@@ -84,6 +79,8 @@ async function resetCluster() {
                 seed: Math.floor(Math.random() * 1000) + 1,
             }),
         });
+        lastScheduledNodeId = null;
+        latestDecisionText.textContent = `Cluster reset with "${scenario}" scenario.`;
         await fetchStatus();
     } catch (err) {
         console.error("Reset error:", err);
@@ -95,14 +92,13 @@ async function submitJob(e) {
     const gpuCount = parseInt(document.getElementById("job-gpu-count").value, 10);
     const vram = parseFloat(document.getElementById("job-vram").value);
     const runtime = parseFloat(document.getElementById("job-runtime").value);
-    const priority = parseInt(document.getElementById("job-priority").value, 10);
     const workloadType = document.getElementById("job-type").value;
 
     const payload = {
         gpu_count: gpuCount,
         vram_per_gpu_gb: vram,
         estimated_runtime: runtime,
-        priority: priority,
+        priority: 7,
         workload_type: workloadType,
         deadline_slack: 2.0,
     };
@@ -114,6 +110,7 @@ async function submitJob(e) {
             body: JSON.stringify(payload),
         });
         const data = await res.json();
+        latestDecisionText.textContent = `Injected Custom Job #${data.job_id} (${gpuCount}x GPUs, ${vram}GB).`;
         await fetchStatus();
     } catch (err) {
         console.error("Submit error:", err);
@@ -127,7 +124,7 @@ function toggleAutoPlay() {
         autoText.textContent = "Pause ⏸";
         autoPlayInterval = setInterval(async () => {
             await stepSimulation();
-        }, 700);
+        }, 750);
     } else {
         btnAuto.classList.remove("active");
         autoText.textContent = "Auto Play ▶";
@@ -141,144 +138,136 @@ function toggleAutoPlay() {
 // --- Render Engine ---
 
 function renderDashboard(data) {
-    // 1. Header Info
+    // Header & Summary
     simTimeEl.textContent = `${data.simulation_time.toFixed(1)}s`;
-
-    // 2. Metrics HUD
-    metricGpuUtil.textContent = `${data.cluster_gpu_utilization_pct.toFixed(1)}%`;
-    barGpuUtil.style.width = `${Math.min(100, data.cluster_gpu_utilization_pct)}%`;
     const activeGpus = data.total_gpus - data.available_gpus;
-    metricGpuCounts.textContent = `${activeGpus} / ${data.total_gpus} GPUs Active`;
+    clusterSummaryChip.innerHTML = `<span class="dot-active"></span> ${activeGpus} / ${data.total_gpus} GPUs Active`;
 
-    metricVramUtil.textContent = `${data.cluster_vram_utilization_pct.toFixed(1)}%`;
-    barVramUtil.style.width = `${Math.min(100, data.cluster_vram_utilization_pct)}%`;
-    const totalVram = data.nodes.reduce((acc, n) => acc + n.total_vram_gb, 0);
-    const allocVram = data.nodes.reduce((acc, n) => acc + n.allocated_vram_gb, 0);
-    metricVramCounts.textContent = `${allocVram.toFixed(0)} GB / ${totalVram.toFixed(0)} GB`;
-
+    // Quick Stats
+    statGpuUtil.textContent = `${data.cluster_gpu_utilization_pct.toFixed(0)}%`;
     const metrics = data.metrics || {};
-    metricThroughput.textContent = (metrics.throughput_jobs_per_hour || 0).toFixed(1);
-    metricCompleted.textContent = metrics.completed_jobs_count || 0;
-    metricJct.textContent = `Mean JCT: ${(metrics.mean_turnaround_time_seconds || 0).toFixed(1)}s`;
+    statThroughput.textContent = (metrics.throughput_jobs_per_hour || 0).toFixed(0);
+    statCompleted.textContent = metrics.completed_jobs_count || 0;
 
-    const missPct = (metrics.deadline_violation_rate || 0) * 100;
-    metricDeadlineMiss.textContent = `${missPct.toFixed(1)}%`;
-    barDeadline.style.width = `${Math.min(100, missPct)}%`;
+    // Render Node Chassis Cards
+    renderNodesDiagram(data.nodes);
 
-    clusterSummaryPill.textContent = `${data.nodes.length} Nodes · ${data.total_gpus} GPUs Total (${data.scenario.toUpperCase()})`;
-
-    // 3. Render Nodes
-    renderNodes(data.nodes);
-
-    // 4. Render Queue
-    renderQueue(data.queue);
-
-    // 5. Render Logs
-    renderLogs(data.recent_logs);
+    // Render Queue Cards
+    renderQueueCards(data.queue);
 }
 
-function renderNodes(nodes) {
+function renderNodesDiagram(nodes) {
     nodesContainer.innerHTML = "";
     nodes.forEach(node => {
-        const nodeCard = document.createElement("div");
-        nodeCard.className = "node-card";
+        const chassis = document.createElement("div");
+        chassis.className = `node-chassis ${node.node_id === lastScheduledNodeId ? 'flash-highlight' : ''}`;
 
-        // Cores markup
-        let coresHtml = "";
+        // Physical GPU chips
+        let chipsHtml = "";
         node.gpus.forEach(gpu => {
             const isBusy = !gpu.is_free;
-            coresHtml += `
-                <div class="gpu-core ${isBusy ? 'busy' : 'free'}">
-                    <div class="gpu-core-top">
-                        <span>GPU ${gpu.gpu_id}</span>
-                        <span>${gpu.total_vram_gb.toFixed(0)}G</span>
+            const flashChip = node.node_id === lastScheduledNodeId && isBusy;
+            chipsHtml += `
+                <div class="gpu-chip ${isBusy ? 'busy' : 'free'} ${flashChip ? 'flash-chip' : ''}">
+                    <div class="chip-top">
+                        <span>GPU #${gpu.gpu_id}</span>
+                        <span>${gpu.total_vram_gb.toFixed(0)} GB</span>
                     </div>
-                    <div class="gpu-core-status">
-                        ${isBusy ? `⚡ Job #${gpu.running_job_id}` : '● FREE'}
+                    <div class="chip-state">
+                        ${isBusy ? `⚡ Job #${gpu.running_job_id}` : '⚪ Available'}
                     </div>
                 </div>
             `;
         });
 
-        // Running Jobs markup
-        let jobsHtml = "";
+        // Running Tasks drawer
+        let runningTasksHtml = "";
         if (node.running_jobs && node.running_jobs.length > 0) {
-            jobsHtml = `<div class="node-running-jobs">`;
+            runningTasksHtml = `<div class="running-jobs-drawer">`;
             node.running_jobs.forEach(rj => {
-                jobsHtml += `
-                    <div class="running-job-item">
-                        <div class="running-job-meta">
+                runningTasksHtml += `
+                    <div class="running-task-pill">
+                        <div>
                             <strong>Job #${rj.job_id}</strong>
-                            <span class="workload-badge workload-${rj.workload_type}">${rj.workload_type}</span>
-                            <span class="text-muted">(${rj.gpu_count}x GPUs · ${rj.vram_gb}GB)</span>
+                            <span class="text-muted">(${rj.workload_type} · ${rj.gpu_count}x GPUs)</span>
                         </div>
-                        <span class="text-muted small">${rj.elapsed_sec.toFixed(0)}s / ${rj.total_runtime_sec.toFixed(0)}s (${rj.progress_pct.toFixed(0)}%)</span>
+                        <span class="text-muted font-mono">${rj.elapsed_sec.toFixed(0)}s / ${rj.total_runtime_sec.toFixed(0)}s (${rj.progress_pct.toFixed(0)}%)</span>
                     </div>
                 `;
             });
-            jobsHtml += `</div>`;
+            runningTasksHtml += `</div>`;
         }
 
-        nodeCard.innerHTML = `
-            <div class="node-header">
-                <div class="node-name">
-                    <span>Node ${node.node_id}</span>
-                    <span class="node-type-badge">${node.gpu_type}</span>
+        chassis.innerHTML = `
+            <div class="chassis-header">
+                <div class="node-label">
+                    <span class="node-id-badge">Node ${node.node_id}</span>
+                    <span class="node-model-tag">${node.gpu_type}</span>
                 </div>
-                <div class="node-vram-text">
-                    ${node.allocated_vram_gb.toFixed(0)} / ${node.total_vram_gb.toFixed(0)} GB VRAM (${node.vram_utilization_pct.toFixed(0)}%)
+                <span class="node-status-online">● Online (${node.available_gpus} / ${node.total_gpus} Free)</span>
+            </div>
+
+            <div class="chassis-meters">
+                <div class="meter-box">
+                    <div class="meter-header">
+                        <span>VRAM Allocated</span>
+                        <span class="meter-val">${node.allocated_vram_gb.toFixed(0)} / ${node.total_vram_gb.toFixed(0)} GB (${node.vram_utilization_pct.toFixed(0)}%)</span>
+                    </div>
+                    <div class="meter-bar-bg"><div class="meter-bar-fill fill-purple" style="width: ${node.vram_utilization_pct}%;"></div></div>
+                </div>
+
+                <div class="meter-box">
+                    <div class="meter-header">
+                        <span>GPU Core Load</span>
+                        <span class="meter-val">${node.total_gpus - node.available_gpus} / ${node.total_gpus} GPUs (${node.gpu_utilization_pct.toFixed(0)}%)</span>
+                    </div>
+                    <div class="meter-bar-bg"><div class="meter-bar-fill fill-blue" style="width: ${node.gpu_utilization_pct}%;"></div></div>
                 </div>
             </div>
-            <div class="progress-bar-bg"><div class="progress-bar-fill fill-purple" style="width: ${node.vram_utilization_pct}%;"></div></div>
-            <div class="gpu-cores-grid">
-                ${coresHtml}
+
+            <div class="gpu-chips-diagram">
+                ${chipsHtml}
             </div>
-            ${jobsHtml}
+
+            ${runningTasksHtml}
         `;
 
-        nodesContainer.appendChild(nodeCard);
+        nodesContainer.appendChild(chassis);
     });
 }
 
-function renderQueue(queue) {
+function renderQueueCards(queue) {
     queueCountEl.textContent = queue.length;
     if (queue.length === 0) {
-        queueTbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding: 24px;">Queue is currently empty.</td></tr>`;
-        queueWaitSummary.textContent = `Mean Wait: 0.0s`;
+        queueContainer.innerHTML = `<div class="empty-queue-msg">Queue is empty.</div>`;
+        queueMeanWait.textContent = `Avg Wait: 0.0s`;
         return;
     }
 
     const meanWait = queue.reduce((acc, j) => acc + j.waiting_time, 0) / queue.length;
-    queueWaitSummary.textContent = `Mean Wait: ${meanWait.toFixed(1)}s`;
+    queueMeanWait.textContent = `Avg Wait: ${meanWait.toFixed(1)}s`;
 
     let html = "";
-    queue.forEach(job => {
-        const isUrgent = job.is_urgent;
+    queue.forEach((job, idx) => {
         html += `
-            <tr class="${isUrgent ? 'urgent-row' : ''}">
-                <td><strong>#${job.slot_index}</strong></td>
-                <td><strong>Job #${job.job_id}</strong> ${isUrgent ? '<span title="Urgent Deadline">🔥</span>' : ''}</td>
-                <td><span class="workload-badge workload-${job.workload_type}">${job.workload_type}</span></td>
-                <td>${job.gpu_count}x</td>
-                <td>${job.vram_per_gpu_gb.toFixed(0)} GB</td>
-                <td>${job.estimated_runtime.toFixed(0)}s</td>
-                <td><strong>★ ${job.priority}</strong></td>
-                <td>${job.waiting_time.toFixed(1)}s</td>
-            </tr>
+            <div class="job-queue-card ${job.is_urgent ? 'urgent' : ''}">
+                <div class="job-card-top">
+                    <span class="job-card-id">#${idx + 1} · Job #${job.job_id}</span>
+                    <span class="job-type-pill pill-${job.workload_type}">${job.workload_type}</span>
+                </div>
+                <div class="job-card-specs">
+                    <span>⚡ ${job.gpu_count}x GPUs</span>
+                    <span>💾 ${job.vram_per_gpu_gb.toFixed(0)} GB</span>
+                    <span>⏱️ ${job.estimated_runtime.toFixed(0)}s</span>
+                </div>
+                <div class="job-card-footer">
+                    <span>Waiting: <strong>${job.waiting_time.toFixed(1)}s</strong></span>
+                    <span>Priority: <strong>★ ${job.priority}</strong></span>
+                </div>
+            </div>
         `;
     });
-    queueTbody.innerHTML = html;
-}
-
-function renderLogs(logs) {
-    if (!logs || logs.length === 0) return;
-    consoleLogs.innerHTML = "";
-    logs.forEach(log => {
-        const logEl = document.createElement("div");
-        logEl.className = `log-entry ${log.level || 'info'}`;
-        logEl.innerHTML = `<span class="log-time">[${log.timestamp.toFixed(1)}s]</span> ${log.message}`;
-        consoleLogs.appendChild(logEl);
-    });
+    queueContainer.innerHTML = html;
 }
 
 // --- Event Listeners ---
@@ -289,11 +278,6 @@ btnReset.addEventListener("click", resetCluster);
 scenarioSelect.addEventListener("change", resetCluster);
 jobForm.addEventListener("submit", submitJob);
 
-btnClearLogs.addEventListener("click", () => {
-    consoleLogs.innerHTML = `<div class="log-entry system"><span class="log-time">[${simTimeEl.textContent}]</span> Log cleared by user.</div>`;
-});
-
-// Keyboard Shortcut: Spacebar steps simulation
 window.addEventListener("keydown", (e) => {
     if (e.code === "Space" && e.target === document.body) {
         e.preventDefault();
@@ -301,7 +285,7 @@ window.addEventListener("keydown", (e) => {
     }
 });
 
-// Initial load & periodic background refresh
+// Initial load
 fetchStatus();
 setInterval(() => {
     if (!isAutoPlaying) {
