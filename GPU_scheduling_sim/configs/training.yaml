@@ -5,6 +5,7 @@ device: "cuda"  # fallback to "cpu" automatically if cuda is unavailable
 # Environment settings
 cluster_config: "configs/cluster_small.yaml"
 reward_config: "configs/reward.yaml"
+scenario: "mixed"  # Trains across all 6 scenarios simultaneously
 max_queue_size: 16
 sim_horizon_seconds: 3600.0  # 1 hour simulation per episode
 
@@ -22,7 +23,7 @@ num_envs: 8            # Parallel environment workers
 rollout_length: 256    # Steps per env per rollout (total batch = num_envs * rollout_length = 2048)
 minibatch_size: 128
 epochs_per_update: 10
-total_timesteps: 500000
+total_timesteps: 200000
 
 # Network Architecture
 hidden_dim: 256

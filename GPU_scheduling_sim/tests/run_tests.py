@@ -26,8 +26,14 @@ if __name__ == "__main__":
         test_best_fit_logic,
         test_baseline_runner_episode,
     )
+    from tests.test_ppo import (
+        test_actor_critic_action_masking,
+        test_rollout_buffer_gae,
+        test_checkpoint_save_and_load,
+        test_ppo_single_update,
+    )
 
-    print("Running Simulator, Workload, Environment & Baseline Unit Tests...")
+    print("Running Complete Test Suite (Phases 1-5)...")
     
     test_gpu_lifecycle()
     print("[PASS] test_gpu_lifecycle")
@@ -80,4 +86,16 @@ if __name__ == "__main__":
     test_baseline_runner_episode()
     print("[PASS] test_baseline_runner_episode")
 
-    print("\nAll 17 tests passed successfully!")
+    test_actor_critic_action_masking()
+    print("[PASS] test_actor_critic_action_masking")
+
+    test_rollout_buffer_gae()
+    print("[PASS] test_rollout_buffer_gae")
+
+    test_checkpoint_save_and_load()
+    print("[PASS] test_checkpoint_save_and_load")
+
+    test_ppo_single_update()
+    print("[PASS] test_ppo_single_update")
+
+    print("\nAll 21 tests passed successfully!")

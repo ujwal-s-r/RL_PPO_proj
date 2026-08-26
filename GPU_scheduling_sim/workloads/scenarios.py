@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 from typing import Dict, List
+import numpy as np
 from simulator.job import WorkloadType
 from workloads.generators import WorkloadConfig, WorkloadGenerator
 
@@ -106,11 +107,16 @@ SCENARIOS: Dict[str, WorkloadConfig] = {
     "bursty": BURSTY,
     "gpu_fragmentation": GPU_FRAGMENTATION,
     "high_load": HIGH_LOAD,
+    "mixed": BALANCED,
+    "all": BALANCED,
 }
 
 
 def get_scenario(name: str) -> WorkloadConfig:
     """Retrieve workload configuration by scenario name."""
+    if name in ["mixed", "all", "random"]:
+        # Default representative scenario for config inspection
+        return SCENARIOS["balanced"]
     if name not in SCENARIOS:
         raise ValueError(
             f"Unknown scenario '{name}'. Available scenarios: {list(SCENARIOS.keys())}"
@@ -125,6 +131,12 @@ def list_scenarios() -> List[str]:
 
 def create_scenario_workload(name: str, seed: int = 42):
     """Generate jobs directly for a named scenario."""
-    cfg = get_scenario(name)
+    if name in ["mixed", "all", "random"]:
+        rng = np.random.default_rng(seed)
+        scenario_keys = list(SCENARIOS.keys())
+        chosen_name = str(rng.choice(scenario_keys))
+        cfg = SCENARIOS[chosen_name]
+    else:
+        cfg = get_scenario(name)
     gen = WorkloadGenerator(cfg)
     return gen.generate(seed=seed)
