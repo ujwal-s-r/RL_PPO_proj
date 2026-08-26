@@ -13,6 +13,7 @@ from api.schemas import (
     JobSubmissionRequest,
     ScheduleStepRequest,
     ClusterResetRequest,
+    CustomClusterSetupRequest,
 )
 from api.inference import ClusterServiceManager
 from workloads.scenarios import list_scenarios
@@ -81,6 +82,13 @@ def reset_cluster(req: ClusterResetRequest) -> Dict[str, Any]:
     """Reset the cluster simulation with a specific scenario and seed."""
     service.reset(req.cluster_config, req.scenario, seed=req.seed)
     return {"status": "reset_successful", "scenario": req.scenario, "seed": req.seed}
+
+
+@app.post("/api/cluster/setup_custom")
+def setup_custom_cluster(req: CustomClusterSetupRequest) -> Dict[str, Any]:
+    """Setup custom 1-10 node cluster topology built interactively by user."""
+    service.reset_dynamic(req.nodes, scenario=req.scenario, seed=req.seed)
+    return {"status": "custom_setup_successful", "nodes_count": len(req.nodes), "scenario": req.scenario}
 
 
 # Mount Frontend static assets

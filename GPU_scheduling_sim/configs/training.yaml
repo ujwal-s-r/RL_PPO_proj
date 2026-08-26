@@ -3,9 +3,9 @@ seed: 42
 device: "cuda"  # fallback to "cpu" automatically if cuda is unavailable
 
 # Environment settings
-cluster_config: "configs/cluster_small.yaml"
 reward_config: "configs/reward.yaml"
 scenario: "mixed"  # Trains across all 6 scenarios simultaneously
+max_nodes: 10      # Dynamic node capacity (1 to 10 nodes with slot padding)
 max_queue_size: 16
 sim_horizon_seconds: 3600.0  # 1 hour simulation per episode
 

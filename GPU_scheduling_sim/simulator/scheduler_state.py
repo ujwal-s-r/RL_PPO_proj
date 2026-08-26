@@ -38,18 +38,20 @@ class SchedulerState:
 
         return node.can_schedule(job)
 
-    def get_action_mask(self) -> np.ndarray:
+    def get_action_mask(self, max_nodes: Optional[int] = None) -> np.ndarray:
         """
-        Construct boolean/float mask of shape (max_queue_size, num_nodes).
+        Construct boolean/float mask of shape (max_queue_size, node_slots).
         
+        If max_nodes is provided (e.g. 10), padded unused node slots receive 0.0 mask.
         1.0 indicates feasible action, 0.0 indicates infeasible action.
         """
-        mask = np.zeros((self.max_queue_size, self.num_nodes), dtype=np.float32)
+        node_slots = max_nodes if max_nodes is not None else self.num_nodes
+        mask = np.zeros((self.max_queue_size, node_slots), dtype=np.float32)
         for j_idx in range(min(len(self.queue), self.max_queue_size)):
             job = self.queue.get_at(j_idx)
             if job is None:
                 continue
-            for n_idx in range(self.num_nodes):
+            for n_idx in range(min(self.num_nodes, node_slots)):
                 node = self.cluster.get_node(n_idx)
                 if node is not None and node.can_schedule(job):
                     mask[j_idx, n_idx] = 1.0

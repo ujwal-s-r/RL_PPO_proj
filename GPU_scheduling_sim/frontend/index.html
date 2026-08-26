@@ -3,169 +3,774 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPU Cluster Scheduler — Visual Resource Manager</title>
+    <title>GPU Cluster Architect</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #000000;
+            --surface: #0a0a0a;
+            --surface-card: #0e0e10;
+            --border: #222222;
+            --border-light: #333333;
+            --text-white: #ffffff;
+            --text-muted: #888888;
+            --text-dim: #555555;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-white);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .main-wrapper {
+            width: 100%;
+            max-width: 1560px;
+            padding: 0 24px 60px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        /* Top Config Section (Phase 1) */
+        .phase-1-header {
+            margin-top: 6vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            text-align: center;
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+        }
+
+        .phase-1-header.slide-left {
+            transform: translateX(-100vw);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        .title-text {
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            color: var(--text-white);
+        }
+
+        .bubbles-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .bubble-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #0f0f10;
+            border: 1px solid var(--border);
+            color: var(--text-white);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            outline: none;
+        }
+
+        .bubble-btn:hover {
+            border-color: #555555;
+            background: #18181b;
+        }
+
+        .bubble-btn.active {
+            background: #ffffff;
+            color: #000000;
+            border-color: #ffffff;
+            transform: scale(1.05);
+        }
+
+        /* Hierarchy Diagram Viewport */
+        .diagram-viewport {
+            position: relative;
+            width: 100%;
+            margin-top: 36px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .diagram-viewport.move-up {
+            transform: translateY(-80px);
+            margin-top: 24px;
+        }
+
+        /* Moving Dashed Lines SVG */
+        .lines-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .animated-dash-line {
+            stroke: #444444;
+            stroke-width: 1.5;
+            stroke-dasharray: 6 6;
+            fill: none;
+            animation: dashMove 1.2s linear infinite;
+        }
+
+        @keyframes dashMove {
+            from { stroke-dashoffset: 24; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Orchestrator Box */
+        .orchestrator-box {
+            position: relative;
+            z-index: 10;
+            background: var(--surface-card);
+            border: 1px solid var(--border-light);
+            border-radius: 8px;
+            padding: 12px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+        }
+
+        .orchestrator-title {
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-white);
+        }
+
+        .orchestrator-sub {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+        }
+
+        /* Single-Line Nodes Row */
+        .nodes-row {
+            position: relative;
+            z-index: 10;
+            margin-top: 56px;
+            width: 100%;
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        /* Node Rectangle Box */
+        .node-rect {
+            flex: 1;
+            max-width: 155px;
+            min-width: 110px;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 8px;
+            min-height: 110px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .node-rect.drag-over {
+            border-color: #ffffff;
+            background: #18181c;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+        }
+
+        .node-rect:hover {
+            border-color: #555555;
+        }
+
+        .node-rect-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .node-id-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .node-slot-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+
+        /* Progress Bar (Capacity) */
+        .node-progress-container {
+            width: 100%;
+            height: 4px;
+            background: #1a1a1a;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .node-progress-bar {
+            height: 100%;
+            background: #ffffff;
+            border-radius: 999px;
+            transition: width 0.2s ease;
+        }
+
+        /* Resource Points Inside Node */
+        .node-resources-list {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            flex: 1;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            justify-content: center;
+        }
+
+        .resource-point {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: #e4e4e7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .point-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #ffffff;
+            flex-shrink: 0;
+        }
+
+        .empty-slot-msg {
+            color: var(--text-dim);
+            font-size: 10px;
+            font-family: 'Inter', sans-serif;
+            text-align: center;
+        }
+
+        /* Action Buttons */
+        .action-bar {
+            margin-top: 40px;
+            display: flex;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .action-bar.hidden {
+            display: none !important;
+        }
+
+        .btn-white {
+            background: #ffffff;
+            color: #000000;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px 26px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-white:hover {
+            background: #e4e4e7;
+            transform: translateY(-1px);
+        }
+
+        /* Phase 2: GPU Palette & Controls */
+        .phase-2-panel {
+            width: 100%;
+            margin-top: 28px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            opacity: 0;
+            transition: transform 0.4s ease, opacity 0.4s ease;
+        }
+
+        .phase-2-panel.active {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0);
+            animation: fadeIn 0.4s 0.1s forwards ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .phase-2-toolbar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            max-width: 1100px;
+            text-align: center;
+        }
+
+        .toolbar-title {
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            color: var(--text-white);
+        }
+
+        .toolbar-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-outline-dark {
+            background: transparent;
+            border: 1px solid var(--border-light);
+            color: var(--text-white);
+            padding: 7px 14px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-outline-dark:hover {
+            background: #18181b;
+            border-color: #666666;
+        }
+
+        /* 4 GPU Cards Grid */
+        .gpu-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .gpu-card-item {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 10px;
+            cursor: grab;
+            background: var(--surface-card);
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .gpu-card-item:hover {
+            border-color: #666666;
+            background: #141416;
+            transform: translateY(-2px);
+        }
+
+        .gpu-card-item:active {
+            cursor: grabbing;
+        }
+
+        .gpu-img {
+            width: 80px;
+            height: 60px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.05));
+        }
+
+        .gpu-card-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .gpu-name-text {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-white);
+            font-family: 'Inter', sans-serif;
+        }
+
+        .gpu-desc-text {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.4;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .phase-2-bottom-actions {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
 </head>
 <body>
-    <!-- Top App Bar -->
-    <header class="app-header">
-        <div class="header-left">
-            <div class="brand-badge">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <rect x="2" y="2" width="20" height="8" rx="2"></rect>
-                    <rect x="2" y="14" width="20" height="8" rx="2"></rect>
-                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
-                </svg>
-                <span>GPU Cluster Visualizer</span>
-            </div>
-
-            <div class="sim-clock">
-                <span class="clock-label">Sim Time</span>
-                <span class="clock-val" id="sim-time">0.0s</span>
-            </div>
-
-            <div class="cluster-summary-chip" id="cluster-summary-chip">
-                <span class="dot-active"></span> 0 / 8 GPUs Active
+    <div class="main-wrapper">
+        <!-- Phase 1: Number Selection (Slides Left on Continue) -->
+        <div class="phase-1-header" id="phase-1-header">
+            <div class="title-text">Configure the number of Nodes</div>
+            <div class="bubbles-row" id="bubbles-row">
+                <!-- 1 to 10 bubbles -->
             </div>
         </div>
 
-        <div class="header-right">
-            <div class="select-wrapper">
-                <label>Policy</label>
-                <select id="policy-select">
-                    <option value="PPO" selected>⚡ PPO (Deep RL)</option>
-                    <option value="SJF">⏱️ Shortest Job First</option>
-                    <option value="BestFit">📦 Best-Fit Bin-Pack</option>
-                    <option value="Priority">⭐ Priority-First</option>
-                    <option value="FIFO">➡️ FIFO</option>
-                </select>
+        <!-- Hierarchy Diagram Viewport -->
+        <div class="diagram-viewport" id="diagram-viewport">
+            <svg class="lines-canvas" id="lines-canvas"></svg>
+
+            <div class="orchestrator-box" id="orchestrator-box">
+                <span class="orchestrator-title">Orchestrator Engine</span>
+                <span class="orchestrator-sub" id="orchestrator-nodes-count">3 Active Nodes</span>
             </div>
 
-            <div class="select-wrapper">
-                <label>Scenario</label>
-                <select id="scenario-select">
-                    <option value="balanced" selected>Balanced Traffic</option>
-                    <option value="training_heavy">Training Heavy (8-GPU)</option>
-                    <option value="short_job_heavy">Short Jobs & Inference</option>
-                    <option value="bursty">Bursty Traffic Spikes</option>
-                    <option value="gpu_fragmentation">GPU Fragmentation</option>
-                    <option value="high_load">High Cluster Load</option>
-                </select>
-            </div>
-
-            <div class="controls-group">
-                <button id="btn-step" class="btn btn-primary" title="Execute 1 Scheduling Step (Spacebar)">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                    Step
-                </button>
-                <button id="btn-auto" class="btn btn-secondary">
-                    <span id="auto-text">Auto Play ▶</span>
-                </button>
-                <button id="btn-reset" class="btn btn-icon" title="Reset Simulation">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                </button>
+            <div class="nodes-row" id="nodes-row">
+                <!-- Dynamic Nodes -->
             </div>
         </div>
-    </header>
 
-    <!-- Main Workspace -->
-    <main class="main-layout">
-        <!-- Left 65%: Cluster Diagram Visualizer -->
-        <section class="topology-section">
-            <div class="section-title-bar">
-                <div>
-                    <h2>Cluster Topology & Node Hierarchy</h2>
-                    <p class="section-desc">Physical server chassis view with real-time VRAM allocation and active GPU slots</p>
-                </div>
-                <div class="cluster-quick-stats">
-                    <div class="stat-pill"><span class="stat-num" id="stat-gpu-util">0%</span> GPU Load</div>
-                    <div class="stat-pill"><span class="stat-num" id="stat-throughput">0</span> Jobs/hr</div>
-                    <div class="stat-pill"><span class="stat-num" id="stat-completed">0</span> Completed</div>
+        <!-- Phase 1 Bottom Action -->
+        <div class="action-bar" id="phase-1-action-bar">
+            <button class="btn-white" id="btn-configure-gpus">
+                Configure the GPU resource →
+            </button>
+        </div>
+
+        <!-- Phase 2: 4 GPU Models & Drag-Drop Panel (Appears after slide) -->
+        <div class="phase-2-panel" id="phase-2-panel">
+            <div class="phase-2-toolbar">
+                <span class="toolbar-title">Drag & Drop GPUs into Target Nodes</span>
+                <div class="toolbar-actions">
+                    <button class="btn-outline-dark" id="btn-random-config">Random Configuration</button>
+                    <button class="btn-outline-dark" id="btn-clear-nodes">Clear GPUs</button>
                 </div>
             </div>
 
-            <!-- Hierarchical Node Chassis List -->
-            <div class="nodes-diagram-grid" id="nodes-container">
-                <!-- Dynamically rendered physical server chassis cards -->
-            </div>
-        </section>
-
-        <!-- Right 35%: Visual Job Queue & Fast Injection -->
-        <aside class="sidebar-section">
-            <!-- Fast Custom Job Submission -->
-            <div class="card inject-card">
-                <div class="card-header">
-                    <h3>➕ Inject Custom Job</h3>
-                    <span class="tag-live">Interactive</span>
-                </div>
-                <form id="job-form" class="inject-form">
-                    <div class="input-grid">
-                        <div class="input-cell">
-                            <label>GPUs</label>
-                            <select id="job-gpu-count">
-                                <option value="1">1 GPU</option>
-                                <option value="2" selected>2 GPUs</option>
-                                <option value="4">4 GPUs</option>
-                                <option value="8">8 GPUs</option>
-                            </select>
-                        </div>
-                        <div class="input-cell">
-                            <label>VRAM / GPU</label>
-                            <select id="job-vram">
-                                <option value="16.0">16 GB</option>
-                                <option value="24.0" selected>24 GB (A10)</option>
-                                <option value="40.0">40 GB (A100)</option>
-                                <option value="80.0">80 GB (H100)</option>
-                            </select>
-                        </div>
+            <!-- 4 GPU Cards -->
+            <div class="gpu-cards-grid">
+                <!-- GPU 1: NVIDIA H100 -->
+                <div class="gpu-card-item" draggable="true" data-type="NVIDIA-H100-80GB" data-name="H100" data-vram="80.0">
+                    <img src="/static/gpu.png" alt="NVIDIA H100" class="gpu-img" onerror="this.src='/gpu.png'">
+                    <div class="gpu-card-info">
+                        <span class="gpu-name-text">NVIDIA H100</span>
+                        <span class="gpu-desc-text">80 GB VRAM · Hopper SXM5<br>3.35 TB/s HBM3 · FP8 Tensor</span>
                     </div>
-                    <div class="input-grid">
-                        <div class="input-cell">
-                            <label>Duration (s)</label>
-                            <input type="number" id="job-runtime" value="120" min="5" max="3600">
-                        </div>
-                        <div class="input-cell">
-                            <label>Type</label>
-                            <select id="job-type">
-                                <option value="training" selected>Training</option>
-                                <option value="fine_tuning">Fine-Tuning</option>
-                                <option value="inference">Inference</option>
-                            </select>
-                        </div>
+                </div>
+
+                <!-- GPU 2: A100 SXM4 -->
+                <div class="gpu-card-item" draggable="true" data-type="A100-SXM4-80GB" data-name="A100-80" data-vram="80.0">
+                    <img src="/static/gpu.png" alt="A100 SXM4" class="gpu-img" onerror="this.src='/gpu.png'">
+                    <div class="gpu-card-info">
+                        <span class="gpu-name-text">A100 SXM4</span>
+                        <span class="gpu-desc-text">80 GB VRAM · Ampere NVLink<br>2.0 TB/s HBM2e · TF32</span>
                     </div>
-                    <button type="submit" class="btn btn-inject">
-                        Submit Job to Queue
-                    </button>
-                </form>
-            </div>
-
-            <!-- Visual Job Queue Cards -->
-            <div class="card queue-card">
-                <div class="card-header">
-                    <h3>📥 Waiting Queue (<span id="queue-count">0</span>)</h3>
-                    <span class="text-muted small" id="queue-mean-wait">Avg Wait: 0.0s</span>
                 </div>
 
-                <div class="queue-cards-list" id="queue-container">
-                    <!-- Dynamic Job Cards -->
-                    <div class="empty-queue-msg">Queue is empty.</div>
+                <!-- GPU 3: A100 PCIe -->
+                <div class="gpu-card-item" draggable="true" data-type="A100-PCIE-40GB" data-name="A100-40" data-vram="40.0">
+                    <img src="/static/gpu.png" alt="A100 PCIe" class="gpu-img" onerror="this.src='/gpu.png'">
+                    <div class="gpu-card-info">
+                        <span class="gpu-name-text">A100 PCIe</span>
+                        <span class="gpu-desc-text">40 GB VRAM · Ampere PCIe 4.0<br>1.55 TB/s HBM2 · Dual-Slot</span>
+                    </div>
+                </div>
+
+                <!-- GPU 4: NVIDIA A10 -->
+                <div class="gpu-card-item" draggable="true" data-type="NVIDIA-A10-24GB" data-name="A10" data-vram="24.0">
+                    <img src="/static/gpu.png" alt="NVIDIA A10" class="gpu-img" onerror="this.src='/gpu.png'">
+                    <div class="gpu-card-info">
+                        <span class="gpu-name-text">NVIDIA A10</span>
+                        <span class="gpu-desc-text">24 GB VRAM · Single-Slot<br>600 GB/s GDDR6 · Inference</span>
+                    </div>
                 </div>
             </div>
-        </aside>
-    </main>
 
-    <!-- Bottom: Recent Decision Banner -->
-    <footer class="decision-footer">
-        <div class="decision-pill">
-            <span class="decision-icon">🎯</span>
-            <span class="decision-text" id="latest-decision-text">Simulation ready. Click "Step" or press Spacebar to start scheduling.</span>
+            <!-- Phase 2 Bottom Actions -->
+            <div class="phase-2-bottom-actions">
+                <button class="btn-white" id="btn-back-to-nodes">
+                    ← Back to Node Config
+                </button>
+            </div>
         </div>
-    </footer>
+    </div>
 
-    <script src="/static/app.js"></script>
+    <script>
+        // State
+        let nodeCount = 3;
+        let nodeGpus = []; // nodeGpus[nodeIdx] = [ { type, name, vram } ]
+        let draggedGpu = null;
+
+        const GPU_CATALOG = [
+            { type: "NVIDIA-H100-80GB", name: "H100", vram: 80.0 },
+            { type: "A100-SXM4-80GB", name: "A100-80", vram: 80.0 },
+            { type: "A100-PCIE-40GB", name: "A100-40", vram: 40.0 },
+            { type: "NVIDIA-A10-24GB", name: "A10", vram: 24.0 },
+        ];
+
+        // DOM
+        const phase1Header = document.getElementById("phase-1-header");
+        const diagramViewport = document.getElementById("diagram-viewport");
+        const phase1ActionBar = document.getElementById("phase-1-action-bar");
+        const phase2Panel = document.getElementById("phase-2-panel");
+
+        const bubblesRow = document.getElementById("bubbles-row");
+        const nodesRow = document.getElementById("nodes-row");
+        const orchestratorBox = document.getElementById("orchestrator-box");
+        const orchestratorNodesCount = document.getElementById("orchestrator-nodes-count");
+        const linesCanvas = document.getElementById("lines-canvas");
+        const btnConfigureGpus = document.getElementById("btn-configure-gpus");
+        const btnBackToNodes = document.getElementById("btn-back-to-nodes");
+
+        // 1. Initialize Number Bubbles 1-10
+        function initBubbles() {
+            bubblesRow.innerHTML = "";
+            for (let i = 1; i <= 10; i++) {
+                const btn = document.createElement("button");
+                btn.className = `bubble-btn ${i === nodeCount ? 'active' : ''}`;
+                btn.dataset.val = i;
+                btn.textContent = i;
+                btn.addEventListener("click", () => setNodeCount(i));
+                bubblesRow.appendChild(btn);
+            }
+        }
+
+        // 2. Set Node Count
+        function setNodeCount(count) {
+            nodeCount = count;
+            document.querySelectorAll(".bubble-btn").forEach(btn => {
+                btn.classList.toggle("active", parseInt(btn.dataset.val, 10) === nodeCount);
+            });
+            orchestratorNodesCount.textContent = `${nodeCount} Active Node${nodeCount > 1 ? 's' : ''}`;
+            syncNodeGpus();
+            renderNodes();
+        }
+
+        function syncNodeGpus() {
+            while (nodeGpus.length < nodeCount) nodeGpus.push([]);
+            if (nodeGpus.length > nodeCount) nodeGpus = nodeGpus.slice(0, nodeCount);
+        }
+
+        // 3. Render Nodes with Resources & Capacity Bar
+        function renderNodes() {
+            nodesRow.innerHTML = "";
+            for (let i = 0; i < nodeCount; i++) {
+                const gpus = nodeGpus[i] || [];
+                const filled = gpus.length;
+                const pct = (filled / 8) * 100;
+
+                // Group duplicate GPUs: { "H100": 2, "A100-80": 1 }
+                const counts = {};
+                gpus.forEach(g => { counts[g.name] = (counts[g.name] || 0) + 1; });
+
+                let resHtml = "";
+                if (filled === 0) {
+                    resHtml = `<span class="empty-slot-msg">No GPUs Assigned</span>`;
+                } else {
+                    for (const [name, count] of Object.entries(counts)) {
+                        const label = count > 1 ? `${name} (x${count})` : name;
+                        resHtml += `
+                            <div class="resource-point">
+                                <span class="point-dot"></span>
+                                <span>${label}</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                const rect = document.createElement("div");
+                rect.className = "node-rect";
+                rect.id = `node-rect-${i}`;
+                rect.innerHTML = `
+                    <div class="node-rect-top">
+                        <span class="node-id-label">Node ${i}</span>
+                        <span class="node-slot-count">${filled}/8</span>
+                    </div>
+                    <div class="node-progress-container">
+                        <div class="node-progress-bar" style="width: ${pct}%;"></div>
+                    </div>
+                    <div class="node-resources-list">
+                        ${resHtml}
+                    </div>
+                `;
+
+                // Drag & drop handlers
+                rect.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    rect.classList.add("drag-over");
+                });
+                rect.addEventListener("dragleave", () => rect.classList.remove("drag-over"));
+                rect.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    rect.classList.remove("drag-over");
+                    if (draggedGpu) {
+                        addGpuToNode(i, draggedGpu);
+                        draggedGpu = null;
+                    }
+                });
+
+                nodesRow.appendChild(rect);
+            }
+
+            requestAnimationFrame(() => {
+                setTimeout(drawDashedLines, 30);
+            });
+        }
+
+        function addGpuToNode(nodeIdx, gpu) {
+            if (!nodeGpus[nodeIdx]) nodeGpus[nodeIdx] = [];
+            if (nodeGpus[nodeIdx].length >= 8) {
+                return;
+            }
+            nodeGpus[nodeIdx].push(gpu);
+            renderNodes();
+        }
+
+        // 4. Draw Animated Moving Dashed Lines (Orchestrator -> Nodes)
+        function drawDashedLines() {
+            linesCanvas.innerHTML = "";
+            const viewportRect = diagramViewport.getBoundingClientRect();
+            const orchRect = orchestratorBox.getBoundingClientRect();
+
+            const startX = orchRect.left + (orchRect.width / 2) - viewportRect.left;
+            const startY = orchRect.bottom - viewportRect.top;
+
+            for (let i = 0; i < nodeCount; i++) {
+                const nodeEl = document.getElementById(`node-rect-${i}`);
+                if (!nodeEl) continue;
+
+                const nodeRect = nodeEl.getBoundingClientRect();
+                const endX = nodeRect.left + (nodeRect.width / 2) - viewportRect.left;
+                const endY = nodeRect.top - viewportRect.top;
+
+                const midY = (startY + endY) / 2;
+                const d = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", d);
+                path.setAttribute("class", "animated-dash-line");
+                linesCanvas.appendChild(path);
+            }
+        }
+
+        window.addEventListener("resize", drawDashedLines);
+
+        // 5. Drag & Drop Setup for 4 GPU Cards
+        document.querySelectorAll(".gpu-card-item").forEach(card => {
+            card.addEventListener("dragstart", (e) => {
+                draggedGpu = {
+                    type: card.dataset.type,
+                    name: card.dataset.name,
+                    vram: parseFloat(card.dataset.vram),
+                };
+                e.dataTransfer.setData("text/plain", card.dataset.type);
+            });
+
+            // Click-to-add fallback (to first free node)
+            card.addEventListener("click", () => {
+                const gpu = {
+                    type: card.dataset.type,
+                    name: card.dataset.name,
+                    vram: parseFloat(card.dataset.vram),
+                };
+                let target = nodeGpus.findIndex(list => list.length < 8);
+                if (target === -1) target = 0;
+                addGpuToNode(target, gpu);
+            });
+        });
+
+        // 6. Transition from Phase 1 to Phase 2
+        btnConfigureGpus.addEventListener("click", () => {
+            phase1Header.classList.add("slide-left");
+            diagramViewport.classList.add("move-up");
+            phase1ActionBar.classList.add("hidden");
+            phase2Panel.classList.add("active");
+            setTimeout(drawDashedLines, 500);
+        });
+
+        // 7. Transition BACK from Phase 2 to Phase 1 (Slide Back)
+        btnBackToNodes.addEventListener("click", () => {
+            phase2Panel.classList.remove("active");
+            diagramViewport.classList.remove("move-up");
+            phase1Header.classList.remove("slide-left");
+            phase1ActionBar.classList.remove("hidden");
+            setTimeout(drawDashedLines, 500);
+        });
+
+        // 8. Random Config Button (Fills each node with realistic installed capacities: 2, 4, or 8 GPUs)
+        document.getElementById("btn-random-config").addEventListener("click", () => {
+            nodeGpus = [];
+            const allowedCounts = [2, 4, 8];
+            for (let i = 0; i < nodeCount; i++) {
+                const chosen = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
+                const count = allowedCounts[Math.floor(Math.random() * allowedCounts.length)];
+                const list = [];
+                for (let k = 0; k < count; k++) list.push(chosen);
+                nodeGpus.push(list);
+            }
+            renderNodes();
+        });
+
+        // 9. Clear Button
+        document.getElementById("btn-clear-nodes").addEventListener("click", () => {
+            nodeGpus = nodeGpus.map(() => []);
+            renderNodes();
+        });
+
+        // Initial setup
+        initBubbles();
+        syncNodeGpus();
+        renderNodes();
+    </script>
 </body>
 </html>

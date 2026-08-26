@@ -72,6 +72,23 @@ class ClusterServiceManager:
         if len(self.recent_logs) > 30:
             self.recent_logs.pop(0)
 
+    def reset_dynamic(self, node_specs: List[Dict[str, Any]], scenario: str = "balanced", seed: int = 42) -> None:
+        """Reset simulator with custom user-built node specifications (1 to 10 nodes)."""
+        self.current_scenario = scenario
+        self.cluster = Cluster.create_dynamic(node_specs)
+        self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
+        self.simulator.reset()
+
+        # Load scenario jobs
+        jobs = create_scenario_workload(scenario, seed=seed)
+        self.simulator.load_workload(jobs)
+
+        # Advance to first scheduling decision point
+        done, _ = self.simulator.step_to_next_decision()
+
+        self.recent_logs.clear()
+        self.log_event(f"Custom cluster ({len(node_specs)} Nodes) initialized with '{scenario}' scenario", level="system")
+
     def reset(self, cluster_config: str, scenario: str, seed: int = 42) -> None:
         """Reset cluster and populate initial scenario workload."""
         self.cluster_config = cluster_config
@@ -79,13 +96,6 @@ class ClusterServiceManager:
         self.cluster = Cluster.from_yaml(self.cluster_config)
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
         self.simulator.reset()
-
-        # Update PPO internal temp environment if cluster config changed
-        if "PPO" in self.policies:
-            self.policies["PPO"] = PPOPolicyScheduler(
-                checkpoint_path=self.checkpoint_path,
-                cluster_config_path=cluster_config,
-            )
 
         # Load scenario jobs
         jobs = create_scenario_workload(scenario, seed=seed)

@@ -14,7 +14,8 @@ class PPOConfig:
     # Environment & Workload settings
     cluster_config: str = "configs/cluster_small.yaml"
     reward_config: str = "configs/reward.yaml"
-    scenario: str = "balanced"
+    scenario: str = "mixed"
+    max_nodes: int = 10             # Dynamic node capacity (1 to 10 nodes with slot padding)
     max_queue_size: int = 16
     sim_horizon_seconds: float = 3600.0
     seed: int = 42

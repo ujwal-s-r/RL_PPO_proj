@@ -28,6 +28,13 @@ class ClusterResetRequest(BaseModel):
     seed: int = Field(default=42, description="Workload generation seed")
 
 
+class CustomClusterSetupRequest(BaseModel):
+    """Payload for setting up custom 1-10 node cluster topology."""
+    nodes: List[Dict[str, Any]] = Field(..., description="List of node specifications")
+    scenario: str = Field(default="balanced", description="Workload scenario name")
+    seed: int = Field(default=42, description="Workload seed")
+
+
 class GPUSlotInfo(BaseModel):
     gpu_id: int
     gpu_type: str

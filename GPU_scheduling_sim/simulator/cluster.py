@@ -14,8 +14,59 @@ class Cluster:
         self.nodes: List[Node] = nodes
 
     @classmethod
+    def create_dynamic(cls, node_specs: List[Dict[str, Any]]) -> Cluster:
+        """Create cluster from list of node specifications."""
+        nodes: List[Node] = []
+        for idx, spec in enumerate(node_specs):
+            node = Node(
+                node_id=idx,
+                gpu_type=spec.get("gpu_type", "A100-SXM4-80GB"),
+                gpu_count=int(spec.get("gpu_count", 4)),
+                vram_per_gpu_gb=float(spec.get("vram_per_gpu_gb", spec.get("vram_gb", 80.0))),
+                cpu_cores=int(spec.get("cpu_cores", 32)),
+                ram_gb=float(spec.get("ram_gb", 128.0)),
+            )
+            nodes.append(node)
+        return cls(nodes)
+
+    @classmethod
+    def create_random(cls, num_nodes: Optional[int] = None, seed: Optional[int] = None) -> Cluster:
+        """
+        Generate random cluster with 1 to 10 nodes and diverse GPU configurations.
+        """
+        import numpy as np
+        rng = np.random.default_rng(seed)
+        n = num_nodes if num_nodes is not None else int(rng.integers(1, 11))
+
+        gpu_templates = [
+            {"type": "A100-SXM4-80GB", "vram": 80.0, "counts": [2, 4, 8]},
+            {"type": "NVIDIA-H100-80GB", "vram": 80.0, "counts": [2, 4, 8]},
+            {"type": "A100-PCIE-40GB", "vram": 40.0, "counts": [2, 4, 8]},
+            {"type": "NVIDIA-A10-24GB", "vram": 24.0, "counts": [2, 4, 8]},
+        ]
+
+        nodes: List[Node] = []
+        for idx in range(n):
+            tmpl = rng.choice(gpu_templates)
+            gpu_cnt = int(rng.choice(tmpl["counts"]))
+            node = Node(
+                node_id=idx,
+                gpu_type=tmpl["type"],
+                gpu_count=gpu_cnt,
+                vram_per_gpu_gb=tmpl["vram"],
+                cpu_cores=32,
+                ram_gb=128.0,
+            )
+            nodes.append(node)
+        return cls(nodes)
+
+    @classmethod
     def from_yaml(cls, yaml_path: str) -> Cluster:
         """Instantiate cluster from YAML configuration file."""
+        import os
+        if not os.path.exists(yaml_path):
+            # Default to dynamic 3-node cluster if path does not exist
+            return cls.create_random(num_nodes=3, seed=42)
         with open(yaml_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         return cls.from_dict(cfg)

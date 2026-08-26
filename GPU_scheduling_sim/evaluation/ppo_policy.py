@@ -67,7 +67,7 @@ class PPOPolicyScheduler(BaseScheduler):
         """
         # Extract observation and mask from state
         obs_vec = self._temp_env._extract_observation(state)
-        mask_2d = state.get_action_mask()
+        mask_2d = state.get_action_mask(max_nodes=self._temp_env.max_nodes)
         mask_vec = mask_2d.flatten()
 
         if not np.any(mask_vec > 0):
