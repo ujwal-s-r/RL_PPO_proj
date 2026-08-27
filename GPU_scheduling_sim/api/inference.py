@@ -349,6 +349,15 @@ class ClusterServiceManager:
                     **b_m,
                 })
 
+        # Compute relative Efficiency Score (0 - 100)
+        max_high_prio_wait = max((m["high_prio_wait"] for m in all_metrics), default=1.0) or 1.0
+        for m in all_metrics:
+            prio_speed_score = max(0.0, 100.0 * (1.0 - (m["high_prio_wait"] / (max_high_prio_wait * 1.25))))
+            sla_score = m["sla_compliance_pct"]
+            util_score = m["gpu_util_pct"]
+            composite = (sla_score * 0.40) + (util_score * 0.35) + (prio_speed_score * 0.25)
+            m["efficiency_score"] = round(composite, 1)
+
         return all_metrics
 
     def get_status(self) -> ClusterStatusResponse:

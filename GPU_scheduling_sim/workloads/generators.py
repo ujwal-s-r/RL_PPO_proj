@@ -77,7 +77,10 @@ class WorkloadGenerator:
         gpu_counts = list(self.config.gpu_count_probs.keys())
         gpu_probs = list(self.config.gpu_count_probs.values())
         
-        workload_types = list(self.config.workload_mix_probs.keys())
+        workload_types = [
+            wt.value if hasattr(wt, "value") else str(wt).lower()
+            for wt in self.config.workload_mix_probs.keys()
+        ]
         workload_probs = [float(p) for p in self.config.workload_mix_probs.values()]
         norm_workload_probs = np.array(workload_probs, dtype=np.float64) / sum(workload_probs)
 
@@ -91,25 +94,50 @@ class WorkloadGenerator:
             if current_time >= self.config.duration_seconds:
                 break
 
-            # Sample job characteristics
+            # Sample job characteristics realistically correlated with workload type
             workload_type = rng.choice(workload_types, p=norm_workload_probs)
-            gpu_count = sampler.sample_gpu_count(gpu_counts, gpu_probs)
-            vram_gb = sampler.sample_vram(
-                self.config.vram_choices_gb,
-                weights=self.config.vram_weights,
-            )
+
+            wt_str = workload_type.value if hasattr(workload_type, "value") else str(workload_type).lower()
+
+            # 1. Tier-1 Production Training: High priority (8-10), high VRAM, tighter SLA
+            if "train" in wt_str:
+                vram_gb = float(rng.choice([40.0, 80.0]))
+                gpu_count = int(rng.choice([2, 4, 8], p=[0.25, 0.45, 0.30]))
+                priority = int(rng.choice([8, 9, 10]))
+                slack_min, slack_max = 1.4, 2.3
+
+            # 2. Tier-2 Fine-Tuning: Mid priority (6-8), mid VRAM
+            elif "tune" in wt_str or "tuning" in wt_str:
+                vram_gb = float(rng.choice([24.0, 40.0, 80.0]))
+                gpu_count = int(rng.choice([1, 2, 4], p=[0.40, 0.40, 0.20]))
+                priority = int(rng.choice([6, 7, 8]))
+                slack_min, slack_max = 1.8, 3.0
+
+            # 3. Tier-2 Evaluation: Mid-low priority (4-6), fast/medium
+            elif "eval" in wt_str:
+                vram_gb = float(rng.choice([16.0, 24.0, 40.0]))
+                gpu_count = int(rng.choice([1, 2], p=[0.70, 0.30]))
+                priority = int(rng.choice([4, 5, 6]))
+                slack_min, slack_max = 2.0, 3.5
+
+            # 4. Tier-3 Spot Inference & Batch Experiments: Low priority (1-4), 1-2 GPUs, loose SLA (gap fillers)
+            else:
+                vram_gb = float(rng.choice([16.0, 24.0]))
+                gpu_count = 1
+                priority = int(rng.choice([1, 2, 3, 4]))
+                slack_min, slack_max = 3.0, 5.5
+
             actual_runtime, estimated_runtime = sampler.sample_runtime(
                 lognorm_mean=self.config.runtime_lognorm_mean,
                 lognorm_sigma=self.config.runtime_lognorm_sigma,
                 min_sec=self.config.runtime_min_sec,
                 max_sec=self.config.runtime_max_sec,
             )
-            priority = sampler.sample_priority()
             deadline = sampler.sample_deadline(
                 arrival_time=current_time,
                 actual_runtime=actual_runtime,
-                slack_min=self.config.deadline_slack_min,
-                slack_max=self.config.deadline_slack_max,
+                slack_min=slack_min,
+                slack_max=slack_max,
             )
 
             job = Job(
