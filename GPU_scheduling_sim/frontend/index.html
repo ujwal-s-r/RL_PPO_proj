@@ -1120,7 +1120,7 @@
                             <th>Scheduling Method</th>
                             <th>Tasks Finished</th>
                             <th>SLA Compliance (%)</th>
-                            <th>Urgent Wait (Prio 8-10)</th>
+                            <th>Mean JCT / Slowdown</th>
                             <th>Total Makespan (s)</th>
                             <th>GPU Util (%)</th>
                             <th>Pareto Score</th>
@@ -1619,9 +1619,9 @@
                     if (m.is_rl) row.className = "row-ppo";
                     row.innerHTML = `
                         <td>${m.policy} ${m.is_rl ? '<span class="tag-winner">PPO AGENT</span>' : ''}</td>
-                        <td>${m.completed} / ${totalWorkloadJobs} (100%)</td>
-                        <td><span class="${m.sla_compliance_pct >= 70 ? 'badge-sla-good' : ''}">${m.sla_compliance_pct ? m.sla_compliance_pct.toFixed(1) : (100.0 - m.deadline_miss_pct).toFixed(1)}%</span></td>
-                        <td><strong>${m.high_prio_wait !== undefined ? m.high_prio_wait.toFixed(1) + 's' : m.mean_waiting.toFixed(1) + 's'}</strong></td>
+                        <td>${m.completed} / ${totalWorkloadJobs} (${Math.round((m.completed / Math.max(1, totalWorkloadJobs)) * 100)}%)</td>
+                        <td><span class="${m.sla_compliance_pct >= 75 ? 'badge-sla-good' : ''}">${m.sla_compliance_pct ? m.sla_compliance_pct.toFixed(1) : (100.0 - m.deadline_miss_pct).toFixed(1)}%</span></td>
+                        <td><strong>${m.mean_jct !== undefined ? m.mean_jct.toFixed(0) + 's' : m.mean_turnaround.toFixed(0) + 's'}</strong> <span style="font-size: 11px; color: #a1a1aa;">(${m.mean_slowdown !== undefined ? m.mean_slowdown.toFixed(2) + 'x' : '1.0x'})</span></td>
                         <td>${m.makespan.toFixed(1)}s</td>
                         <td>${m.gpu_util_pct.toFixed(1)}%</td>
                         <td><strong style="color: #ffffff;">${m.efficiency_score !== undefined ? m.efficiency_score.toFixed(1) : '94.2'}</strong></td>

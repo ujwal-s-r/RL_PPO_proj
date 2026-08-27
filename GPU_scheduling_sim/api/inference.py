@@ -198,22 +198,30 @@ class ClusterServiceManager:
         Step PPO on the primary interactive simulator and advance all 4 baselines simultaneously.
         """
         ppo_policy = self.policies["PPO"]
-        state = self.simulator.get_state()
-        action = ppo_policy.select_action(state)
-
+        
+        # 1. Multi-Action Placement Loop: place qualifying jobs iteratively at the same timestamp t
         action_taken = False
         placed_job_id = None
         target_node_id = None
 
-        if action is not None:
+        for _ in range(16): # Up to max queue size placements per decision point
+            state = self.simulator.get_state()
+            if not state.has_any_valid_action():
+                break
+            action = ppo_policy.select_action(state)
+            if action is None:
+                break
             job_idx, node_idx = action
             job = state.queue.get_at(job_idx)
             if job and self.simulator.apply_action(job_idx, node_idx):
                 action_taken = True
-                placed_job_id = job.job_id
-                target_node_id = node_idx
+                if placed_job_id is None:
+                    placed_job_id = job.job_id
+                    target_node_id = node_idx
+            else:
+                break
 
-        # Advance PPO simulator
+        # Advance PPO simulator to next event
         done, completed = self.simulator.step_to_next_decision()
         for c_job in completed:
             self.completed_history.insert(0, {
@@ -248,7 +256,7 @@ class ClusterServiceManager:
         if done:
             for b_name, b_sim in self.baseline_sims.items():
                 b_policy = self.policies[b_name]
-                for _ in range(200):
+                for _ in range(400):
                     b_state = b_sim.get_state()
                     b_act = b_policy.select_action(b_state)
                     if b_act is not None:
@@ -282,12 +290,30 @@ class ClusterServiceManager:
         }
 
     def _extract_sim_metrics(self, sim: Simulator) -> Dict[str, Any]:
-        """Extract statistical metrics from a discrete simulator instance."""
+        """Extract academic and systems benchmark metrics (JCT, Slowdown, Makespan, Fairness, Util)."""
         c_jobs = sim.completed_jobs
         c_count = len(c_jobs)
         if c_count > 0:
             turnarounds = [j.turnaround_time for j in c_jobs if j.turnaround_time is not None]
-            mean_turnaround = float(np.mean(turnarounds)) if turnarounds else 0.0
+            mean_jct = float(np.mean(turnarounds)) if turnarounds else 0.0
+            
+            # Bounded Slowdown: JCT / max(Runtime, 10.0s) (Decima / DeepRM standard)
+            slowdowns = [
+                j.turnaround_time / max(10.0, j.actual_runtime)
+                for j in c_jobs if j.turnaround_time is not None
+            ]
+            mean_slowdown = float(np.mean(slowdowns)) if slowdowns else 1.0
+            p95_slowdown = float(np.percentile(slowdowns, 95)) if slowdowns else 1.0
+
+            # Jain's Fairness Index on Inverse Slowdown: (sum x)^2 / (n * sum x^2)
+            inv_slowdowns = [1.0 / s for s in slowdowns if s > 0]
+            if inv_slowdowns:
+                sum_x = sum(inv_slowdowns)
+                sum_sq_x = sum(x * x for x in inv_slowdowns)
+                jains_fairness = float((sum_x * sum_x) / (len(inv_slowdowns) * sum_sq_x)) if sum_sq_x > 0 else 1.0
+            else:
+                jains_fairness = 1.0
+
             mean_waiting = float(np.mean([j.waiting_time for j in c_jobs]))
             miss_count = sum(1 for j in c_jobs if j.is_deadline_missed())
             deadline_miss_pct = (miss_count / c_count) * 100.0
@@ -298,7 +324,10 @@ class ClusterServiceManager:
             mean_high_prio_wait = float(np.mean(high_prio)) if high_prio else 0.0
             mean_low_prio_wait = float(np.mean(low_prio)) if low_prio else 0.0
         else:
-            mean_turnaround = 0.0
+            mean_jct = 0.0
+            mean_slowdown = 1.0
+            p95_slowdown = 1.0
+            jains_fairness = 1.0
             mean_waiting = 0.0
             mean_high_prio_wait = 0.0
             mean_low_prio_wait = 0.0
@@ -315,7 +344,11 @@ class ClusterServiceManager:
 
         return {
             "completed": c_count,
-            "mean_turnaround": round(mean_turnaround, 1),
+            "mean_jct": round(mean_jct, 1),
+            "mean_turnaround": round(mean_jct, 1),
+            "mean_slowdown": round(mean_slowdown, 2),
+            "p95_slowdown": round(p95_slowdown, 2),
+            "jains_fairness": round(jains_fairness, 3),
             "mean_waiting": round(mean_waiting, 1),
             "high_prio_wait": round(mean_high_prio_wait, 1),
             "low_prio_wait": round(mean_low_prio_wait, 1),
@@ -326,7 +359,7 @@ class ClusterServiceManager:
         }
 
     def _compute_benchmark_summary(self) -> List[Dict[str, Any]]:
-        """Calculate metrics across PPO and all 4 baselines."""
+        """Calculate academic metrics across PPO and all 4 baselines."""
         all_metrics = []
 
         # 1. PPO Metrics
@@ -349,13 +382,15 @@ class ClusterServiceManager:
                     **b_m,
                 })
 
-        # Compute relative Efficiency Score (0 - 100)
-        max_high_prio_wait = max((m["high_prio_wait"] for m in all_metrics), default=1.0) or 1.0
+        # Compute relative Pareto Efficiency Score (0 - 100)
+        # Weights: 35% SLA Compliance + 30% Effective GPU Util + 20% Low Slowdown + 15% Makespan
+        min_makespan = min((m["makespan"] for m in all_metrics if m["makespan"] > 0), default=1.0) or 1.0
         for m in all_metrics:
-            prio_speed_score = max(0.0, 100.0 * (1.0 - (m["high_prio_wait"] / (max_high_prio_wait * 1.25))))
             sla_score = m["sla_compliance_pct"]
             util_score = m["gpu_util_pct"]
-            composite = (sla_score * 0.40) + (util_score * 0.35) + (prio_speed_score * 0.25)
+            slowdown_score = max(0.0, 100.0 * (1.0 - ((m["mean_slowdown"] - 1.0) / 4.0)))
+            makespan_score = min(100.0, (min_makespan / max(1.0, m["makespan"])) * 100.0)
+            composite = (sla_score * 0.35) + (util_score * 0.30) + (slowdown_score * 0.20) + (makespan_score * 0.15)
             m["efficiency_score"] = round(composite, 1)
 
         return all_metrics

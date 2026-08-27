@@ -30,8 +30,8 @@ class ActorCritic(nn.Module):
         self.action_dim = action_dim
         self.hidden_dim = hidden_dim
 
-        # Dimensionality splits: 10 nodes * 8 feats = 80, 16 queue * 9 feats = 144, 7 globals
-        self.num_nodes = 10
+        # Dimensionality splits: 8 nodes * 8 feats = 64, 16 queue * 9 feats = 144, 7 globals (obs_dim = 215)
+        self.num_nodes = 8
         self.node_feat_dim = 8
         self.max_queue = 16
         self.queue_feat_dim = 9
@@ -73,18 +73,23 @@ class ActorCritic(nn.Module):
 
     def _extract_features(self, obs: torch.Tensor) -> torch.Tensor:
         """Process structured observations through attention and projections."""
+        dev = next(self.parameters()).device
+        obs = obs.to(dev)
         batch_size = obs.shape[0]
 
-        # 1. Slice node features (B, 10, 8)
-        node_raw = obs[:, :80].view(batch_size, self.num_nodes, self.node_feat_dim)
-        node_emb = self.node_proj(node_raw)  # (B, 10, 64)
+        node_end = self.num_nodes * self.node_feat_dim  # 8 * 8 = 64
+        q_end = node_end + (self.max_queue * self.queue_feat_dim)  # 64 + 144 = 208
+
+        # 1. Slice node features (B, 8, 8)
+        node_raw = obs[:, :node_end].view(batch_size, self.num_nodes, self.node_feat_dim)
+        node_emb = self.node_proj(node_raw)  # (B, 8, 64)
 
         # 2. Slice queue features (B, 16, 9)
-        q_raw = obs[:, 80:224].view(batch_size, self.max_queue, self.queue_feat_dim)
+        q_raw = obs[:, node_end:q_end].view(batch_size, self.max_queue, self.queue_feat_dim)
         q_emb = self.queue_proj(q_raw)  # (B, 16, 64)
 
         # 3. Slice global features (B, 7)
-        g_raw = obs[:, 224:231]
+        g_raw = obs[:, q_end:q_end + self.global_dim]
         g_emb = self.global_proj(g_raw)  # (B, 32)
 
         # 4. Cross Attention: Queue attends to Nodes
@@ -107,6 +112,7 @@ class ActorCritic(nn.Module):
         if mask is None:
             return logits
 
+        mask = mask.to(logits.device)
         # Safety: if mask has an all-zero row, fall back to unmasked for that row to prevent NaN
         all_zeros = (mask.sum(dim=-1, keepdim=True) == 0)
         safe_mask = torch.where(all_zeros, torch.ones_like(mask), mask)

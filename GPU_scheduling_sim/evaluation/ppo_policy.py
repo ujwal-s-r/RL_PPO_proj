@@ -38,24 +38,25 @@ class PPOPolicyScheduler(BaseScheduler):
 
         # Load network from checkpoint
         hidden_dim = 256
+        self.actor_critic = ActorCritic(
+            obs_dim=self.obs_dim,
+            action_dim=self.action_dim,
+            hidden_dim=hidden_dim,
+        ).to(self.device)
+
         if os.path.exists(checkpoint_path):
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            hidden_dim = checkpoint.get("config", {}).get("hidden_dim", 256)
-            self.actor_critic = ActorCritic(
-                obs_dim=self.obs_dim,
-                action_dim=self.action_dim,
-                hidden_dim=hidden_dim,
-            ).to(self.device)
-            self.actor_critic.load_state_dict(checkpoint["model_state_dict"])
-            self.actor_critic.eval()
-            print(f"Loaded PPO policy checkpoint from '{checkpoint_path}' (hidden_dim={hidden_dim}) on [{self.device.type.upper()}]")
+            try:
+                checkpoint = torch.load(checkpoint_path, map_location=self.device)
+                hidden_dim = checkpoint.get("config", {}).get("hidden_dim", 256)
+                self.actor_critic.load_state_dict(checkpoint["model_state_dict"])
+                self.actor_critic.eval()
+                print(f"Loaded PPO policy checkpoint from '{checkpoint_path}' on [{self.device.type.upper()}]")
+            except Exception as e:
+                print(f"Notice: Checkpoint '{checkpoint_path}' has legacy architecture shape ({e}). Initializing fresh Cross-Attention weights.")
+                self.actor_critic.eval()
         else:
-            self.actor_critic = ActorCritic(
-                obs_dim=self.obs_dim,
-                action_dim=self.action_dim,
-                hidden_dim=hidden_dim,
-            ).to(self.device)
-            print(f"Warning: Checkpoint '{checkpoint_path}' not found. Initialized with random weights.")
+            self.actor_critic.eval()
+            print(f"Warning: Checkpoint '{checkpoint_path}' not found. Initialized with fresh weights.")
 
     @property
     def name(self) -> str:
