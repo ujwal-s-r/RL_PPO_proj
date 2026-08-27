@@ -1,9 +1,9 @@
-# Refined Multi-Objective Reward Coefficients:
-completion_weight: 2.5
-waiting_weight: 0.008
-idle_gpu_weight: 0.015
-deadline_miss_weight: 3.5
+# Sharpened Multi-Objective Reward Coefficients:
+completion_weight: 1.5
+waiting_weight: 0.025
+idle_gpu_weight: 0.010
+deadline_miss_weight: 8.0
 invalid_action_penalty: 2.0
 step_penalty: 0.001
-fragmentation_bonus_weight: 0.25
-turnaround_efficiency_weight: 0.50
+fragmentation_bonus_weight: 0.30
+turnaround_efficiency_weight: 0.75
