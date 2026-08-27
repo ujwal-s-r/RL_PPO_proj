@@ -30,11 +30,11 @@ class PPOConfig:
     max_grad_norm: float = 0.5
 
     # Vectorized Rollout & Optimization Batching
-    num_envs: int = 8               # Parallel CPU simulator workers
-    rollout_length: int = 256       # Steps collected per env before update (Total batch = 8 * 256 = 2048)
-    minibatch_size: int = 128       # Minibatch size for GPU tensor updates
+    num_envs: int = 16              # 16 Parallel CPU simulator workers for 2x faster trajectory collection
+    rollout_length: int = 256       # Steps collected per env before update (Total batch = 16 * 256 = 4096)
+    minibatch_size: int = 256       # Scaled GPU minibatch tensor size for high RTX 3050 CUDA saturation
     epochs_per_update: int = 10     # Epochs per PPO optimization step
-    total_timesteps: int = 100_000   # Total environment steps across all workers
+    total_timesteps: int = 500_000  # Total environment steps across all workers
 
     # Network Architecture
     hidden_dim: int = 256
