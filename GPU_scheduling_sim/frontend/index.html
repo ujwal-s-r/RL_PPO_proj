@@ -1230,7 +1230,21 @@
         }
 
         function syncNodeGpus() {
-            while (nodeGpus.length < nodeCount) nodeGpus.push([]);
+            const defaultPresets = [
+                [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[3], GPU_CATALOG[3]], // 2x H100 + 2x A10
+                [GPU_CATALOG[1], GPU_CATALOG[1], GPU_CATALOG[2], GPU_CATALOG[2]], // 2x A100-80 + 2x A100-40
+                [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[1], GPU_CATALOG[1]], // 2x H100 + 2x A100-80
+                [GPU_CATALOG[2], GPU_CATALOG[2], GPU_CATALOG[3], GPU_CATALOG[3]], // 2x A100-40 + 2x A10
+                [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[3], GPU_CATALOG[3]], // 2x H100 + 2x A10
+                [GPU_CATALOG[1], GPU_CATALOG[1], GPU_CATALOG[3], GPU_CATALOG[3]], // 2x A100-80 + 2x A10
+                [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[2], GPU_CATALOG[2]], // 2x H100 + 2x A100-40
+                [GPU_CATALOG[2], GPU_CATALOG[2], GPU_CATALOG[3], GPU_CATALOG[3]], // 2x A100-40 + 2x A10
+            ];
+
+            while (nodeGpus.length < nodeCount) {
+                const idx = nodeGpus.length;
+                nodeGpus.push([...defaultPresets[idx % defaultPresets.length]]);
+            }
             if (nodeGpus.length > nodeCount) nodeGpus = nodeGpus.slice(0, nodeCount);
         }
 
@@ -1326,12 +1340,13 @@
                         const chip = document.createElement("div");
                         const liveGpu = liveStatus && liveStatus.gpus ? liveStatus.gpus[gpuIdx] : null;
                         const isGpuBusy = liveGpu && !liveGpu.is_free;
+                        const displayName = liveGpu ? (liveGpu.gpu_type.includes('H100') ? 'H100' : liveGpu.gpu_type.includes('PCIE-40GB') ? 'A100 40G' : liveGpu.gpu_type.includes('A10-24') ? 'A10 24G' : 'A100 80G') : (gpu.name || 'GPU');
 
                         chip.className = `gpu-chip-box ${isGpuBusy ? 'chip-active' : ''}`;
                         chip.id = `gpu-chip-${i}-${gpuIdx}`;
                         chip.innerHTML = `
                             <div class="chip-header-row">
-                                <span class="chip-name">${gpu.name}</span>
+                                <span class="chip-name">${displayName}</span>
                                 <span class="chip-state-tag">${isGpuBusy ? `⚡ Task #${liveGpu.running_job_id}` : '⚪ Idle'}</span>
                             </div>
                             <div class="chip-vram-bar">
@@ -1449,7 +1464,7 @@
         btnLaunchSim.addEventListener("click", async () => {
             for (let i = 0; i < nodeCount; i++) {
                 if (!nodeGpus[i] || nodeGpus[i].length === 0) {
-                    nodeGpus[i] = [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[1], GPU_CATALOG[1]];
+                    nodeGpus[i] = [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[3], GPU_CATALOG[3]];
                 }
             }
 
@@ -1466,9 +1481,14 @@
             setTimeout(drawAllAnimatedLines, 500);
 
             const nodeSpecs = nodeGpus.map(gpus => ({
+                gpus: gpus.map(g => ({
+                    type: g.type,
+                    vram_gb: g.vram,
+                    name: g.name,
+                })),
                 gpu_type: gpus[0].type,
                 gpu_count: gpus.length,
-                vram_per_gpu_gb: gpus[0].vram,
+                vram_per_gpu_gb: Math.max(...gpus.map(g => g.vram)),
             }));
 
             try {
@@ -1675,12 +1695,25 @@
 
         document.getElementById("btn-random-config").addEventListener("click", () => {
             nodeGpus = [];
-            const allowed = [2, 4, 8];
+            const allowedCounts = [2, 4, 8];
             for (let i = 0; i < nodeCount; i++) {
-                const chosen = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
-                const count = allowed[Math.floor(Math.random() * allowed.length)];
+                const totalCount = allowedCounts[Math.floor(Math.random() * allowedCounts.length)];
+                const isHybrid = Math.random() < 0.65; // 65% chance of mixed intra-node GPUs
                 const list = [];
-                for (let k = 0; k < count; k++) list.push(chosen);
+
+                if (isHybrid && totalCount >= 4) {
+                    const g1 = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
+                    let g2 = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
+                    while (g2.type === g1.type && GPU_CATALOG.length > 1) {
+                        g2 = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
+                    }
+                    const half = totalCount / 2;
+                    for (let k = 0; k < half; k++) list.push(g1);
+                    for (let k = half; k < totalCount; k++) list.push(g2);
+                } else {
+                    const chosen = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
+                    for (let k = 0; k < totalCount; k++) list.push(chosen);
+                }
                 nodeGpus.push(list);
             }
             renderNodes();

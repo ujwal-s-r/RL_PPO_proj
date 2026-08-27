@@ -15,48 +15,67 @@ class Cluster:
 
     @classmethod
     def create_dynamic(cls, node_specs: List[Dict[str, Any]]) -> Cluster:
-        """Create cluster from list of node specifications."""
+        """Create cluster from list of node specifications (supporting mixed GPUs)."""
         nodes: List[Node] = []
         for idx, spec in enumerate(node_specs):
-            node = Node(
-                node_id=idx,
-                gpu_type=spec.get("gpu_type", "A100-SXM4-80GB"),
-                gpu_count=int(spec.get("gpu_count", 4)),
-                vram_per_gpu_gb=float(spec.get("vram_per_gpu_gb", spec.get("vram_gb", 80.0))),
-                cpu_cores=int(spec.get("cpu_cores", 32)),
-                ram_gb=float(spec.get("ram_gb", 128.0)),
-            )
+            if "gpus" in spec and isinstance(spec["gpus"], list) and len(spec["gpus"]) > 0:
+                node = Node(
+                    node_id=idx,
+                    gpu_specs=spec["gpus"],
+                    cpu_cores=int(spec.get("cpu_cores", 32)),
+                    ram_gb=float(spec.get("ram_gb", 128.0)),
+                )
+            else:
+                node = Node(
+                    node_id=idx,
+                    gpu_type=spec.get("gpu_type", "A100-SXM4-80GB"),
+                    gpu_count=int(spec.get("gpu_count", 4)),
+                    vram_per_gpu_gb=float(spec.get("vram_per_gpu_gb", spec.get("vram_gb", 80.0))),
+                    cpu_cores=int(spec.get("cpu_cores", 32)),
+                    ram_gb=float(spec.get("ram_gb", 128.0)),
+                )
             nodes.append(node)
         return cls(nodes)
 
     @classmethod
     def create_random(cls, num_nodes: Optional[int] = None, seed: Optional[int] = None) -> Cluster:
         """
-        Generate random cluster with 1 to 10 nodes and diverse GPU configurations.
+        Generate stratified random cluster with 1 to 8 nodes with both uniform and hybrid mixed nodes.
         """
         import numpy as np
         rng = np.random.default_rng(seed)
-        n = num_nodes if num_nodes is not None else int(rng.integers(1, 11))
+        n = num_nodes if num_nodes is not None else int(rng.integers(1, 9))
 
-        gpu_templates = [
-            {"type": "A100-SXM4-80GB", "vram": 80.0, "counts": [2, 4, 8]},
-            {"type": "NVIDIA-H100-80GB", "vram": 80.0, "counts": [2, 4, 8]},
-            {"type": "A100-PCIE-40GB", "vram": 40.0, "counts": [2, 4, 8]},
-            {"type": "NVIDIA-A10-24GB", "vram": 24.0, "counts": [2, 4, 8]},
+        gpu_catalog = [
+            {"type": "A100-SXM4-80GB", "vram": 80.0},
+            {"type": "NVIDIA-H100-80GB", "vram": 80.0},
+            {"type": "A100-PCIE-40GB", "vram": 40.0},
+            {"type": "NVIDIA-A10-24GB", "vram": 24.0},
         ]
 
         nodes: List[Node] = []
         for idx in range(n):
-            tmpl = rng.choice(gpu_templates)
-            gpu_cnt = int(rng.choice(tmpl["counts"]))
-            node = Node(
-                node_id=idx,
-                gpu_type=tmpl["type"],
-                gpu_count=gpu_cnt,
-                vram_per_gpu_gb=tmpl["vram"],
-                cpu_cores=32,
-                ram_gb=128.0,
-            )
+            # 40% probability of hybrid mixed intra-node GPUs, 60% uniform
+            is_hybrid = rng.random() < 0.40
+            total_gpus = int(rng.choice([2, 4, 8], p=[0.30, 0.50, 0.20]))
+
+            if is_hybrid and total_gpus >= 4:
+                # Sample 2 distinct GPU types to mix inside this node (e.g. 2x H100 + 2x A10)
+                g1 = rng.choice(gpu_catalog)
+                g2 = rng.choice([g for g in gpu_catalog if g["type"] != g1["type"]])
+                half = total_gpus // 2
+                mixed_chips = [g1] * half + [g2] * (total_gpus - half)
+                node = Node(node_id=idx, gpu_specs=mixed_chips, cpu_cores=32, ram_gb=128.0)
+            else:
+                tmpl = rng.choice(gpu_catalog)
+                node = Node(
+                    node_id=idx,
+                    gpu_type=tmpl["type"],
+                    gpu_count=total_gpus,
+                    vram_per_gpu_gb=tmpl["vram"],
+                    cpu_cores=32,
+                    ram_gb=128.0,
+                )
             nodes.append(node)
         return cls(nodes)
 

@@ -9,26 +9,40 @@ from simulator.job import Job
 
 @dataclass
 class Node:
-    """Represents a heterogeneous cluster node."""
+    """Represents a heterogeneous cluster node with mixed or uniform GPU chips."""
     node_id: int
-    gpu_type: str
-    gpu_count: int
-    vram_per_gpu_gb: float
+    gpu_type: str = "A100-SXM4-80GB"
+    gpu_count: int = 4
+    vram_per_gpu_gb: float = 80.0
     cpu_cores: int = 32
     ram_gb: float = 128.0
+    gpu_specs: Optional[List[Dict[str, Any]]] = None
     
     gpus: List[GPU] = field(init=False)
     running_jobs: Dict[int, Job] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
-        self.gpus = [
-            GPU(
-                gpu_id=i,
-                gpu_type=self.gpu_type,
-                total_vram_gb=self.vram_per_gpu_gb
-            )
-            for i in range(self.gpu_count)
-        ]
+        if self.gpu_specs and len(self.gpu_specs) > 0:
+            self.gpus = [
+                GPU(
+                    gpu_id=i,
+                    gpu_type=str(s.get("type", s.get("gpu_type", self.gpu_type))),
+                    total_vram_gb=float(s.get("vram", s.get("vram_gb", s.get("total_vram_gb", self.vram_per_gpu_gb))))
+                )
+                for i, s in enumerate(self.gpu_specs)
+            ]
+            self.gpu_count = len(self.gpus)
+            self.vram_per_gpu_gb = max((g.total_vram_gb for g in self.gpus), default=80.0)
+            self.gpu_type = self.gpus[0].gpu_type if self.gpus else "A100-SXM4-80GB"
+        else:
+            self.gpus = [
+                GPU(
+                    gpu_id=i,
+                    gpu_type=self.gpu_type,
+                    total_vram_gb=self.vram_per_gpu_gb
+                )
+                for i in range(self.gpu_count)
+            ]
         self.running_jobs = {}
 
     @property
@@ -74,42 +88,34 @@ class Node:
     def can_schedule(self, job: Job) -> bool:
         """
         Check if the job can fit onto this node:
-        1. Node must have enough free GPUs.
-        2. The GPU VRAM capacity must be >= job's vram_per_gpu_gb requirement.
+        1. Node must have at least job.gpu_count free GPUs.
+        2. Each allocated GPU must have total VRAM >= job's vram_per_gpu_gb requirement.
         """
-        if job.gpu_count > self.available_gpu_count:
-            return False
-        # Each required GPU must have sufficient VRAM capacity
-        if job.vram_per_gpu_gb > self.vram_per_gpu_gb:
-            return False
-        return True
+        matching_free = [g for g in self.available_gpus if g.total_vram_gb >= job.vram_per_gpu_gb]
+        return len(matching_free) >= job.gpu_count
 
     def schedule(self, job: Job, current_time: float) -> List[int]:
         """
-        Allocate GPUs on this node for the job and update state.
-        
-        Returns:
-            List of assigned GPU IDs.
-            
-        Raises:
-            ValueError: If job cannot be scheduled on this node.
+        Allocate matching GPUs on this node for the job.
+        Sorts free GPUs by VRAM ascending to pick the tightest fit (saving high-VRAM GPUs for bigger tasks).
         """
-        if not self.can_schedule(job):
+        matching_free = [g for g in self.available_gpus if g.total_vram_gb >= job.vram_per_gpu_gb]
+        if len(matching_free) < job.gpu_count:
             raise ValueError(
-                f"Node {self.node_id} ({self.gpu_type}) cannot fit Job {job.job_id}: "
+                f"Node {self.node_id} cannot fit Job {job.job_id}: "
                 f"req={job.gpu_count}x{job.vram_per_gpu_gb}GB, "
-                f"avail={self.available_gpu_count}/{self.gpu_count} GPUs, "
-                f"vram_cap={self.vram_per_gpu_gb}GB"
+                f"matching_free={len(matching_free)}/{self.gpu_count} GPUs"
             )
 
-        # Select first N available GPUs
-        free_gpus = self.available_gpus[:job.gpu_count]
+        # Best-fit sort: pick smallest sufficient VRAM first
+        matching_free.sort(key=lambda g: g.total_vram_gb)
+        selected_gpus = matching_free[:job.gpu_count]
         assigned_gpu_ids: List[int] = []
 
-        for gpu in free_gpus:
+        for gpu in selected_gpus:
             success = gpu.allocate(job.job_id, job.vram_per_gpu_gb)
             if not success:
-                # Rollback previously assigned GPUs in this call
+                # Rollback
                 for g_id in assigned_gpu_ids:
                     self.gpus[g_id].release()
                 raise RuntimeError(f"Failed to allocate GPU {gpu.gpu_id} on Node {self.node_id}")
