@@ -61,14 +61,15 @@ class Simulator:
         self.integrated_idle_gpu_seconds = 0.0
         self.integrated_busy_gpu_seconds = 0.0
 
-        # Schedule end of horizon event
-        self.event_queue.push(
-            Event(
-                timestamp=self.horizon_seconds,
-                priority=EventPriority.HORIZON,
-                event_type=EventType.HORIZON_REACHED,
+        # Schedule end of horizon event only if explicitly configured
+        if self.horizon_seconds is not None and self.horizon_seconds > 0:
+            self.event_queue.push(
+                Event(
+                    timestamp=self.horizon_seconds,
+                    priority=EventPriority.HORIZON,
+                    event_type=EventType.HORIZON_REACHED,
+                )
             )
-        )
         return self.get_state()
 
     def submit_job(self, job: Job) -> None:
@@ -153,10 +154,6 @@ class Simulator:
         step_completed_jobs: List[Job] = []
 
         while not self.event_queue.is_empty:
-            # Check if there is already a feasible action with current queue/cluster
-            if self.get_state().has_any_valid_action():
-                return False, step_completed_jobs
-
             event = self.event_queue.pop()
             self._update_integrals(event.timestamp)
 
@@ -174,10 +171,8 @@ class Simulator:
 
             elif event.event_type == EventType.JOB_ARRIVAL:
                 if event.job is not None:
-                    pushed = self.queue.push(event.job)
-                    if not pushed:
-                        # Queue overflow drop / mark failed
-                        event.job.status = JobStatus.FAILED
+                    # Queue is unlimited so push always succeeds — zero drops
+                    self.queue.push(event.job)
 
             # Recheck invariants after every event processing
             self.cluster.validate_invariants()
@@ -186,8 +181,14 @@ class Simulator:
             if self.get_state().has_any_valid_action():
                 return False, step_completed_jobs
 
-        # No more events remaining in queue
-        return True, step_completed_jobs
+        # No more events remaining: done only if ALL submitted jobs completed and nothing running
+        running_count = sum(len(n.running_jobs) for n in self.cluster.nodes)
+        is_done = (
+            len(self.completed_jobs) >= len(self.submitted_jobs)
+            and len(self.queue) == 0
+            and running_count == 0
+        )
+        return is_done, step_completed_jobs
 
     def peek_next_arrival(self) -> Tuple[float, float, float]:
         """
@@ -197,7 +198,7 @@ class Simulator:
             (time_until_arrival_sec, gpu_count, vram_per_gpu_gb).
             If no upcoming arrival exists, returns (3600.0, 0.0, 0.0).
         """
-        for event in self.event_queue._heap:
+        for event in list(self.event_queue._heap):
             if event.event_type == EventType.JOB_ARRIVAL and event.job is not None:
                 dt = max(0.0, event.timestamp - self.current_time)
                 return dt, float(event.job.gpu_count), float(event.job.vram_per_gpu_gb)

@@ -73,23 +73,27 @@ class ClusterServiceManager:
             self.recent_logs.pop(0)
 
     def reset_dynamic(self, node_specs: List[Dict[str, Any]], scenario: str = "balanced", seed: int = 42) -> None:
-        """Reset simulator with custom user-built node specifications (1 to 10 nodes)."""
+        """Reset simulator with custom user-built node specifications (1 to 8 nodes)."""
         self.current_scenario = scenario
         self.current_node_specs = node_specs
         self.current_seed = seed
         self.cluster = Cluster.create_dynamic(node_specs)
-        self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
+        # Horizon is None so all tasks in workload execute to 100% completion
+        self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=None)
         self.simulator.reset()
 
-        # Update PPO internal temp environment for custom cluster
-        if "PPO" in self.policies:
-            self.policies["PPO"] = PPOPolicyScheduler(
-                checkpoint_path=self.checkpoint_path,
-                cluster_config_path=self.cluster_config,
-            )
+        # Adapt job requirements to cluster max node capacities so every job is physically schedulable
+        max_cluster_gpus_per_node = max((n.gpu_count for n in self.cluster.nodes), default=8)
+        max_cluster_vram = max((n.vram_per_gpu_gb for n in self.cluster.nodes), default=80.0)
 
-        # Load scenario jobs
-        jobs = create_scenario_workload(scenario, seed=seed)
+        raw_jobs = create_scenario_workload(scenario, seed=seed)
+        jobs = []
+        for j in raw_jobs:
+            j.gpu_count = max(1, min(j.gpu_count, max_cluster_gpus_per_node))
+            j.vram_per_gpu_gb = min(j.vram_per_gpu_gb, max_cluster_vram)
+            jobs.append(j)
+
+        self.total_scenario_jobs = len(jobs)
         self.simulator.load_workload(jobs)
 
         # Advance to first scheduling decision point
@@ -99,16 +103,28 @@ class ClusterServiceManager:
         self.baseline_sims: Dict[str, Simulator] = {}
         for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
             b_cluster = Cluster.create_dynamic(node_specs)
-            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=3600.0)
+            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=None)
             b_sim.reset()
-            b_jobs = create_scenario_workload(scenario, seed=seed)
+            b_jobs = [
+                Job(
+                    job_id=j.job_id,
+                    workload_type=j.workload_type,
+                    gpu_count=j.gpu_count,
+                    vram_per_gpu_gb=j.vram_per_gpu_gb,
+                    actual_runtime=j.actual_runtime,
+                    estimated_runtime=j.estimated_runtime,
+                    priority=j.priority,
+                    arrival_time=j.arrival_time,
+                    deadline=j.deadline,
+                ) for j in jobs
+            ]
             b_sim.load_workload(b_jobs)
             b_sim.step_to_next_decision()
             self.baseline_sims[b_name] = b_sim
 
         self.recent_logs.clear()
         self.completed_history: List[Dict[str, Any]] = []
-        self.log_event(f"Custom cluster ({len(node_specs)} Nodes) initialized with '{scenario}' scenario", level="system")
+        self.log_event(f"Custom cluster ({len(node_specs)} Nodes) initialized with '{scenario}' scenario ({self.total_scenario_jobs} jobs)", level="system")
 
     def reset(self, cluster_config: str, scenario: str, seed: int = 42) -> None:
         """Reset cluster and populate initial scenario workload."""
@@ -116,11 +132,12 @@ class ClusterServiceManager:
         self.current_scenario = scenario
         self.current_seed = seed
         self.cluster = Cluster.from_yaml(self.cluster_config)
-        self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
+        self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=100000.0)
         self.simulator.reset()
 
         # Load scenario jobs
         jobs = create_scenario_workload(scenario, seed=seed)
+        self.total_scenario_jobs = len(jobs)
         self.simulator.load_workload(jobs)
 
         # Advance to first scheduling decision
@@ -130,7 +147,7 @@ class ClusterServiceManager:
         self.baseline_sims = {}
         for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
             b_cluster = Cluster.from_yaml(self.cluster_config)
-            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=3600.0)
+            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=100000.0)
             b_sim.reset()
             b_jobs = create_scenario_workload(scenario, seed=seed)
             b_sim.load_workload(b_jobs)
@@ -139,7 +156,7 @@ class ClusterServiceManager:
 
         self.recent_logs.clear()
         self.completed_history = []
-        self.log_event(f"Cluster initialized with '{scenario}' scenario (seed={seed})", level="system")
+        self.log_event(f"Cluster reset to '{scenario}' scenario ({self.total_scenario_jobs} jobs)", level="system")
 
     def submit_custom_job(self, req: JobSubmissionRequest) -> Dict[str, Any]:
         """Inject a custom user job directly into the live cluster queue."""
@@ -209,15 +226,14 @@ class ClusterServiceManager:
                 "finish_time": round(c_job.completion_time if c_job.completion_time is not None else self.simulator.current_time, 1),
                 "node_id": c_job.allocated_node_id if c_job.allocated_node_id is not None else 0,
             })
-            if len(self.completed_history) > 40:
+            if len(self.completed_history) > 50:
                 self.completed_history.pop()
 
         # Step all 4 baselines simultaneously up to current simulation timestamp
         current_t = self.simulator.current_time
         for b_name, b_sim in self.baseline_sims.items():
             b_policy = self.policies[b_name]
-            # Step until caught up or finished
-            for _ in range(20):
+            for _ in range(25):
                 if b_sim.current_time >= current_t:
                     break
                 b_state = b_sim.get_state()
@@ -228,8 +244,27 @@ class ClusterServiceManager:
                 if b_done:
                     break
 
+        # If PPO simulation finished all jobs, let baselines finish all remaining jobs too
+        if done:
+            for b_name, b_sim in self.baseline_sims.items():
+                b_policy = self.policies[b_name]
+                for _ in range(200):
+                    b_state = b_sim.get_state()
+                    b_act = b_policy.select_action(b_state)
+                    if b_act is not None:
+                        b_sim.apply_action(*b_act)
+                    b_done, _ = b_sim.step_to_next_decision()
+                    if b_done:
+                        break
+
         # Compute live comparative metrics
         benchmark_summary = self._compute_benchmark_summary()
+
+        total_jobs = getattr(self, "total_scenario_jobs", len(self.simulator.submitted_jobs))
+        completed_cnt = len(self.simulator.completed_jobs)
+        running_cnt = sum(len(n.running_jobs) for n in self.simulator.cluster.nodes)
+        queue_cnt = len(self.simulator.queue)
+        remaining_cnt = max(0, total_jobs - completed_cnt)
 
         return {
             "action_taken": action_taken,
@@ -239,6 +274,11 @@ class ClusterServiceManager:
             "is_done": done,
             "benchmark_summary": benchmark_summary,
             "completed_history": self.completed_history,
+            "total_scenario_jobs": total_jobs,
+            "completed_jobs_count": completed_cnt,
+            "running_jobs_count": running_cnt,
+            "queue_jobs_count": queue_cnt,
+            "remaining_jobs_count": remaining_cnt,
         }
 
     def _extract_sim_metrics(self, sim: Simulator) -> Dict[str, Any]:
@@ -251,19 +291,38 @@ class ClusterServiceManager:
             mean_waiting = float(np.mean([j.waiting_time for j in c_jobs]))
             miss_count = sum(1 for j in c_jobs if j.is_deadline_missed())
             deadline_miss_pct = (miss_count / c_count) * 100.0
+            last_completion = max([j.completion_time for j in c_jobs if j.completion_time is not None] or [sim.current_time])
+            total_duration = last_completion
+            high_prio = [j.waiting_time for j in c_jobs if j.priority >= 7]
+            low_prio = [j.waiting_time for j in c_jobs if j.priority < 7]
+            mean_high_prio_wait = float(np.mean(high_prio)) if high_prio else 0.0
+            mean_low_prio_wait = float(np.mean(low_prio)) if low_prio else 0.0
         else:
             mean_turnaround = 0.0
             mean_waiting = 0.0
+            mean_high_prio_wait = 0.0
+            mean_low_prio_wait = 0.0
             deadline_miss_pct = 0.0
+            total_duration = sim.current_time
 
-        gpu_util = sim.cluster.gpu_utilization * 100.0
+        duration = max(1.0, total_duration)
+        total_cluster_gpus = sim.cluster.total_gpus
+        if total_cluster_gpus > 0:
+            avg_gpu_util = (sim.integrated_busy_gpu_seconds / (total_cluster_gpus * duration)) * 100.0
+            avg_gpu_util = min(100.0, max(0.0, avg_gpu_util))
+        else:
+            avg_gpu_util = 0.0
+
         return {
             "completed": c_count,
             "mean_turnaround": round(mean_turnaround, 1),
             "mean_waiting": round(mean_waiting, 1),
-            "gpu_util_pct": round(gpu_util, 1),
+            "high_prio_wait": round(mean_high_prio_wait, 1),
+            "low_prio_wait": round(mean_low_prio_wait, 1),
+            "gpu_util_pct": round(avg_gpu_util, 1),
             "deadline_miss_pct": round(deadline_miss_pct, 1),
-            "makespan": round(sim.current_time, 1),
+            "sla_compliance_pct": round(100.0 - deadline_miss_pct, 1),
+            "makespan": round(total_duration, 1),
         }
 
     def _compute_benchmark_summary(self) -> List[Dict[str, Any]]:

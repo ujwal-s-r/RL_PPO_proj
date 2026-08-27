@@ -24,7 +24,7 @@ class BestFitScheduler(BaseScheduler):
         best_pair: Optional[Tuple[int, int]] = None
         best_score = float("inf")
 
-        for j_idx in range(len(state.queue)):
+        for j_idx in range(min(len(state.queue), mask.shape[0])):
             job = state.queue.get_at(j_idx)
             if job is None:
                 continue

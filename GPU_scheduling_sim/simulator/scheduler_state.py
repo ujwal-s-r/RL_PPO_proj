@@ -40,14 +40,16 @@ class SchedulerState:
 
     def get_action_mask(self, max_nodes: Optional[int] = None) -> np.ndarray:
         """
-        Construct boolean/float mask of shape (max_queue_size, node_slots).
+        Construct boolean/float mask of shape (queue_slots, node_slots).
         
-        If max_nodes is provided (e.g. 10), padded unused node slots receive 0.0 mask.
+        If max_nodes is provided (e.g. for PPO env), padded unused slots receive 0.0 mask.
         1.0 indicates feasible action, 0.0 indicates infeasible action.
         """
         node_slots = max_nodes if max_nodes is not None else self.num_nodes
-        mask = np.zeros((self.max_queue_size, node_slots), dtype=np.float32)
-        for j_idx in range(min(len(self.queue), self.max_queue_size)):
+        q_len = len(self.queue)
+        q_slots = self.max_queue_size if max_nodes is not None else max(self.max_queue_size, q_len)
+        mask = np.zeros((q_slots, node_slots), dtype=np.float32)
+        for j_idx in range(min(q_len, q_slots)):
             job = self.queue.get_at(j_idx)
             if job is None:
                 continue

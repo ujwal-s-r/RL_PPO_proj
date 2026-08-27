@@ -23,7 +23,7 @@ class SJFScheduler(BaseScheduler):
         
         # Collect candidate jobs with their queue indices and estimated runtimes
         candidates: List[Tuple[int, float]] = []
-        for j_idx in range(len(state.queue)):
+        for j_idx in range(min(len(state.queue), mask.shape[0])):
             job = state.queue.get_at(j_idx)
             if job is not None and any(mask[j_idx, :] > 0):
                 candidates.append((j_idx, job.estimated_runtime))

@@ -22,7 +22,7 @@ class FIFOScheduler(BaseScheduler):
         mask = state.get_action_mask()
         
         # Iterate queue in arrival order (0 is oldest)
-        for j_idx in range(len(state.queue)):
+        for j_idx in range(min(len(state.queue), mask.shape[0])):
             for n_idx in range(state.num_nodes):
                 if mask[j_idx, n_idx] > 0:
                     return j_idx, n_idx

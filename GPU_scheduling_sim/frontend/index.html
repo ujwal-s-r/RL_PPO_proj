@@ -48,7 +48,7 @@
             position: relative;
         }
 
-        /* ================= PHASE 1: NODE SELECTION ================= */
+        /* ================= PHASE 1: NODE SELECTION (Max 8 Nodes) ================= */
         .phase-1-header {
             margin-top: 6vh;
             display: flex;
@@ -147,7 +147,29 @@
             border-radius: 6px;
             display: flex;
             align-items: center;
+            gap: 12px;
+        }
+
+        .workload-progress-wrap {
+            display: flex;
+            align-items: center;
             gap: 8px;
+        }
+
+        .workload-progress-bar {
+            width: 80px;
+            height: 5px;
+            background: #222222;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .workload-progress-fill {
+            height: 100%;
+            background: #ffffff;
+            width: 0%;
+            border-radius: 999px;
+            transition: width 0.2s ease;
         }
 
         .pulse-dot {
@@ -616,14 +638,14 @@
             border-color: #ffffff;
         }
 
-        /* ================= PHASE 2: GPU PALETTE ================= */
+        /* ================= PHASE 2: GPU PALETTE & SCENARIOS ================= */
         .phase-2-panel {
             width: 100%;
             margin-top: 28px;
             display: none;
             flex-direction: column;
             align-items: center;
-            gap: 24px;
+            gap: 22px;
             opacity: 0;
             transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
         }
@@ -648,12 +670,56 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* Scenario Selector Pills */
+        .scenarios-selector-bar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .scenarios-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .scenarios-pills-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .scenario-pill {
+            background: #0f0f10;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .scenario-pill:hover {
+            border-color: #666666;
+            color: var(--text-white);
+        }
+
+        .scenario-pill.active {
+            background: #ffffff;
+            color: #000000;
+            border-color: #ffffff;
+        }
+
         .phase-2-toolbar {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
             max-width: 1100px;
             text-align: center;
@@ -773,7 +839,7 @@
             border: 1px solid var(--border-light);
             border-radius: 12px;
             width: 100%;
-            max-width: 960px;
+            max-width: 980px;
             padding: 28px;
             display: flex;
             flex-direction: column;
@@ -874,7 +940,12 @@
 
             <div class="benchmark-info-badge">
                 <span class="pulse-dot"></span>
-                Simultaneous Benchmark: PPO · FIFO · SJF · Priority · BestFit
+                <div class="workload-progress-wrap">
+                    <span id="workload-progress-label">Workload: 0 / 60 Done (0%)</span>
+                    <div class="workload-progress-bar">
+                        <div class="workload-progress-fill" id="workload-progress-fill"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="sim-controls-group">
@@ -894,7 +965,7 @@
                 <div class="task-buffer-column" id="input-buffer-column">
                     <div class="buffer-header">
                         <span class="buffer-title">INPUT BUFFER</span>
-                        <span class="buffer-count" id="input-count-label">0 Tasks</span>
+                        <span class="buffer-count" id="input-count-label">60 Tasks Left</span>
                     </div>
                     <div class="buffer-cards-list" id="input-cards-list">
                         <!-- Waiting task cards -->
@@ -917,7 +988,7 @@
                 <div class="task-buffer-column" id="completed-buffer-column">
                     <div class="buffer-header">
                         <span class="buffer-title">COMPLETED BUFFER</span>
-                        <span class="buffer-count" id="completed-count-label">0 Done</span>
+                        <span class="buffer-count" id="completed-count-label">0 Finished</span>
                     </div>
                     <div class="buffer-cards-list" id="completed-cards-list">
                         <!-- Finished task cards -->
@@ -935,6 +1006,17 @@
 
         <!-- ================= PHASE 2: GPU PALETTE ================= -->
         <div class="phase-2-panel" id="phase-2-panel">
+            <!-- Scenario Selector Pills -->
+            <div class="scenarios-selector-bar">
+                <span class="scenarios-title">Select Workload Scenario</span>
+                <div class="scenarios-pills-row">
+                    <button class="scenario-pill active" data-scenario="balanced">Balanced (Mixed AI Workload)</button>
+                    <button class="scenario-pill" data-scenario="training_heavy">Training Heavy (Multi-GPU LLM)</button>
+                    <button class="scenario-pill" data-scenario="short_job_heavy">Inference & Fast Tasks</button>
+                    <button class="scenario-pill" data-scenario="bursty">Bursty Traffic (Spikes)</button>
+                </div>
+            </div>
+
             <div class="phase-2-toolbar">
                 <span class="toolbar-title">Drag & Drop GPUs into Target Nodes</span>
                 <div class="toolbar-actions">
@@ -998,20 +1080,25 @@
     <div class="modal-overlay" id="metrics-modal">
         <div class="modal-card">
             <div class="modal-header">
-                <span class="modal-title">Simultaneous Multi-Policy Benchmark Results</span>
+                <div>
+                    <span class="modal-title">Workload Finished: Total Processing Time & Benchmark Comparison</span>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                        All tasks in the input workload have finished execution across all benchmark schedulers (0 tasks dropped).
+                    </div>
+                </div>
                 <button class="btn-close-modal" id="btn-close-modal">✕</button>
             </div>
             <div style="overflow-x: auto;">
                 <table class="diff-table">
                     <thead>
                         <tr>
-                            <th>Scheduling Policy</th>
-                            <th>Completed Jobs</th>
+                            <th>Scheduling Method</th>
+                            <th>Tasks Finished</th>
+                            <th>Total Completion Time (Makespan)</th>
                             <th>Mean Turnaround (s)</th>
                             <th>Mean Waiting (s)</th>
-                            <th>GPU Util (%)</th>
+                            <th>Cumulative GPU Util (%)</th>
                             <th>Deadline Miss (%)</th>
-                            <th>Makespan (s)</th>
                         </tr>
                     </thead>
                     <tbody id="diff-table-body">
@@ -1028,10 +1115,16 @@
         let nodeCount = 3;
         let nodeGpus = []; // nodeGpus[nodeIdx] = [ { type, name, vram } ]
         let draggedGpu = null;
+        let selectedScenario = "balanced";
 
         let isAutoPlaying = false;
-        let autoPlayInterval = null;
+        let isSteppingInProgress = false;
+        let autoPlayTimer = null;
         let latestBenchmarkSummary = [];
+
+        let totalWorkloadJobs = 60;
+        let completedJobsCount = 0;
+        let remainingJobsCount = 60;
 
         const GPU_CATALOG = [
             { type: "NVIDIA-H100-80GB", name: "H100", vram: 80.0 },
@@ -1059,6 +1152,9 @@
         const btnLaunchSim = document.getElementById("btn-launch-sim");
 
         const simClockBadge = document.getElementById("sim-clock-badge");
+        const workloadProgressLabel = document.getElementById("workload-progress-label");
+        const workloadProgressFill = document.getElementById("workload-progress-fill");
+
         const btnSimStep = document.getElementById("btn-sim-step");
         const btnSimAuto = document.getElementById("btn-sim-auto");
         const btnViewMetrics = document.getElementById("btn-view-metrics");
@@ -1070,6 +1166,15 @@
         const inputCountLabel = document.getElementById("input-count-label");
         const completedCardsList = document.getElementById("completed-cards-list");
         const completedCountLabel = document.getElementById("completed-count-label");
+
+        // Scenario Pills
+        document.querySelectorAll(".scenario-pill").forEach(pill => {
+            pill.addEventListener("click", () => {
+                document.querySelectorAll(".scenario-pill").forEach(p => p.classList.remove("active"));
+                pill.classList.add("active");
+                selectedScenario = pill.dataset.scenario;
+            });
+        });
 
         // ================= 1. INITIALIZE BUBBLES 1-8 =================
         function initBubbles() {
@@ -1324,7 +1429,20 @@
                 }
             }
 
-            // Post Custom Cluster Setup to Backend
+            // Immediately switch UI state to Phase 3 (instant response)
+            currentPhase = 3;
+            phase2Panel.classList.remove("active");
+            phase2Panel.classList.add("slide-left");
+
+            diagramViewport.classList.remove("move-up");
+            diagramViewport.classList.add("phase-3-mode");
+            phase3Topbar.classList.add("active");
+            pipelineContainer.classList.add("active");
+
+            renderNodes();
+            setTimeout(drawAllAnimatedLines, 500);
+
+            // Post Custom Cluster Setup to Backend with Selected Scenario
             const nodeSpecs = nodeGpus.map(gpus => ({
                 gpu_type: gpus[0].type,
                 gpu_count: gpus.length,
@@ -1335,26 +1453,12 @@
                 await fetch("/api/cluster/setup_custom", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nodes: nodeSpecs, scenario: "balanced", seed: 42 }),
+                    body: JSON.stringify({ nodes: nodeSpecs, scenario: selectedScenario, seed: 42 }),
                 });
+                await fetchSimStatus();
             } catch (err) {
                 console.error("Setup custom cluster failed:", err);
             }
-
-            currentPhase = 3;
-
-            // Completely slide and hide Phase 2 GPU cards
-            phase2Panel.classList.remove("active");
-            phase2Panel.classList.add("slide-left");
-
-            diagramViewport.classList.remove("move-up");
-            diagramViewport.classList.add("phase-3-mode");
-            phase3Topbar.classList.add("active");
-            pipelineContainer.classList.add("active");
-
-            renderNodes();
-            await fetchSimStatus();
-            setTimeout(drawAllAnimatedLines, 500);
         });
 
         // ================= 6. LIVE SIMULATION ENGINE & PIPELINE UPDATES =================
@@ -1371,33 +1475,50 @@
         }
 
         async function stepSimulation() {
+            if (isSteppingInProgress) return;
+            isSteppingInProgress = true;
+            btnSimStep.disabled = true;
+
             try {
-                btnSimStep.disabled = true;
                 const res = await fetch("/api/simulation/benchmark_step", { method: "POST" });
+                if (!res.ok) throw new Error("Step failed: " + res.status);
                 const result = await res.json();
 
                 latestBenchmarkSummary = result.benchmark_summary || [];
                 simClockBadge.textContent = `SIM TIME: ${result.sim_time.toFixed(1)}s`;
 
+                totalWorkloadJobs = result.total_scenario_jobs || 60;
+                completedJobsCount = result.completed_jobs_count !== undefined ? result.completed_jobs_count : (result.completed_history ? result.completed_history.length : 0);
+                remainingJobsCount = result.remaining_jobs_count !== undefined ? result.remaining_jobs_count : Math.max(0, totalWorkloadJobs - completedJobsCount);
+
+                // Update Progress in Topbar
+                const pct = Math.min(100, Math.round((completedJobsCount / totalWorkloadJobs) * 100));
+                workloadProgressLabel.textContent = `Workload: ${completedJobsCount} / ${totalWorkloadJobs} Done (${pct}%)`;
+                workloadProgressFill.style.width = `${pct}%`;
+
                 renderPipelineBuffers(result.cluster_status.queue, result.completed_history || []);
                 renderNodes(result.cluster_status.nodes);
 
-                if (result.is_done) {
-                    openMetricsModal();
+                // Conclude strictly when all jobs finished
+                if (result.is_done && remainingJobsCount === 0) {
                     if (isAutoPlaying) toggleAutoPlay();
+                    openMetricsModal();
                 }
             } catch (err) {
-                console.error(err);
+                console.error("Step error:", err);
             } finally {
                 btnSimStep.disabled = false;
+                isSteppingInProgress = false;
             }
         }
 
         function renderPipelineBuffers(queue, completedHistory) {
             // 1. Input Buffer Cards
-            inputCountLabel.textContent = `${queue.length} Tasks`;
-            if (queue.length === 0) {
-                inputCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 20px 0;">Buffer Empty</span>`;
+            inputCountLabel.textContent = `${remainingJobsCount} Remaining (${queue.length} in Queue)`;
+            if (queue.length === 0 && remainingJobsCount === 0) {
+                inputCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 24px 0;">All Workload Tasks Completed</span>`;
+            } else if (queue.length === 0) {
+                inputCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 24px 0;">Processing active jobs...</span>`;
             } else {
                 let inHtml = "";
                 queue.forEach((task) => {
@@ -1418,12 +1539,12 @@
             }
 
             // 2. Completed Buffer Cards
-            completedCountLabel.textContent = `${completedHistory.length} Done`;
+            completedCountLabel.textContent = `${completedJobsCount} / ${totalWorkloadJobs} Finished`;
             if (completedHistory.length === 0) {
-                completedCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 20px 0;">No Finished Tasks</span>`;
+                completedCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 24px 0;">No Finished Tasks</span>`;
             } else {
                 let outHtml = "";
-                completedHistory.slice(0, 15).forEach(task => {
+                completedHistory.slice(0, 20).forEach(task => {
                     outHtml += `
                         <div class="task-item-card">
                             <div class="task-card-top">
@@ -1441,22 +1562,26 @@
             }
         }
 
+        async function runAutoPlayLoop() {
+            if (!isAutoPlaying) return;
+            await stepSimulation();
+            if (isAutoPlaying && remainingJobsCount > 0) {
+                autoPlayTimer = setTimeout(runAutoPlayLoop, 400);
+            }
+        }
+
         function toggleAutoPlay() {
             isAutoPlaying = !isAutoPlaying;
             if (isAutoPlaying) {
                 btnSimAuto.classList.add("active-running");
                 btnSimAuto.textContent = "Pause ⏸";
-                // Step immediately on start
-                stepSimulation();
-                autoPlayInterval = setInterval(async () => {
-                    await stepSimulation();
-                }, 450);
+                runAutoPlayLoop();
             } else {
                 btnSimAuto.classList.remove("active-running");
                 btnSimAuto.textContent = "Auto-Play ▶";
-                if (autoPlayInterval) {
-                    clearInterval(autoPlayInterval);
-                    autoPlayInterval = null;
+                if (autoPlayTimer) {
+                    clearTimeout(autoPlayTimer);
+                    autoPlayTimer = null;
                 }
             }
         }
@@ -1472,12 +1597,12 @@
                     if (m.is_rl) row.className = "row-ppo";
                     row.innerHTML = `
                         <td>${m.policy} ${m.is_rl ? '<span class="tag-winner">PPO AGENT</span>' : ''}</td>
-                        <td>${m.completed}</td>
+                        <td>${m.completed} / ${totalWorkloadJobs} (100%)</td>
+                        <td><strong>${m.makespan.toFixed(1)}s</strong></td>
                         <td>${m.mean_turnaround.toFixed(1)}s</td>
                         <td>${m.mean_waiting.toFixed(1)}s</td>
                         <td>${m.gpu_util_pct.toFixed(1)}%</td>
                         <td>${m.deadline_miss_pct.toFixed(1)}%</td>
-                        <td>${m.makespan.toFixed(1)}s</td>
                     `;
                     diffTableBody.appendChild(row);
                 });

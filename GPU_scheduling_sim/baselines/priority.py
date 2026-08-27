@@ -23,7 +23,7 @@ class PriorityScheduler(BaseScheduler):
 
         # Candidates: (j_idx, priority, wait_time)
         candidates: List[Tuple[int, int, float]] = []
-        for j_idx in range(len(state.queue)):
+        for j_idx in range(min(len(state.queue), mask.shape[0])):
             job = state.queue.get_at(j_idx)
             if job is not None and any(mask[j_idx, :] > 0):
                 wait_time = max(0.0, state.current_time - job.arrival_time)

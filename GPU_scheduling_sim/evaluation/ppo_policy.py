@@ -71,6 +71,11 @@ class PPOPolicyScheduler(BaseScheduler):
         mask_vec = mask_2d.flatten()
 
         if not np.any(mask_vec > 0):
+            # If top 16 are currently waiting on larger resources, search deeper queue slots
+            for j_idx in range(len(state.queue)):
+                for n_idx in range(state.num_nodes):
+                    if state.is_action_valid(j_idx, n_idx):
+                        return j_idx, n_idx
             return None
 
         # Convert to tensors
@@ -95,5 +100,10 @@ class PPOPolicyScheduler(BaseScheduler):
         valid_indices = np.where(mask_vec > 0)[0]
         if len(valid_indices) > 0:
             return self._temp_env.decode_action(int(valid_indices[0]))
+
+        for j_idx in range(len(state.queue)):
+            for n_idx in range(state.num_nodes):
+                if state.is_action_valid(j_idx, n_idx):
+                    return j_idx, n_idx
 
         return None
