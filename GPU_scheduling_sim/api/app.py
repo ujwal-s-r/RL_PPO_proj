@@ -71,6 +71,20 @@ def submit_job(req: JobSubmissionRequest) -> Dict[str, Any]:
     return service.submit_custom_job(req)
 
 
+@app.post("/api/cluster/reset")
+def reset_cluster(req: ClusterResetRequest) -> Dict[str, Any]:
+    """Reset the cluster simulation with a specific scenario and seed."""
+    service.reset(req.cluster_config, req.scenario, seed=req.seed)
+    return {"status": "reset_successful", "scenario": req.scenario, "seed": req.seed}
+
+
+@app.post("/api/cluster/setup_custom")
+def setup_custom_cluster(req: CustomClusterSetupRequest) -> Dict[str, Any]:
+    """Setup custom 1-8 node cluster topology built interactively by user."""
+    service.reset_dynamic(req.nodes, scenario=req.scenario, seed=req.seed)
+    return {"status": "custom_setup_successful", "nodes_count": len(req.nodes), "scenario": req.scenario}
+
+
 @app.post("/api/simulation/benchmark_step")
 def simulation_benchmark_step() -> Dict[str, Any]:
     """Execute simultaneous multi-policy simulation step (PPO + FIFO + SJF + Priority + BestFit)."""

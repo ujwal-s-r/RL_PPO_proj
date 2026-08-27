@@ -203,11 +203,11 @@ class ClusterServiceManager:
                 "job_id": c_job.job_id,
                 "gpu_count": c_job.gpu_count,
                 "vram_gb": c_job.vram_per_gpu_gb,
-                "turnaround_time": round(c_job.turnaround_time, 1),
+                "turnaround_time": round(c_job.turnaround_time, 1) if c_job.turnaround_time is not None else 0.0,
                 "waiting_time": round(c_job.waiting_time, 1),
                 "workload_type": c_job.workload_type.value if hasattr(c_job.workload_type, "value") else str(c_job.workload_type),
-                "finish_time": round(self.simulator.current_time, 1),
-                "node_id": getattr(c_job, "node_id", target_node_id if target_node_id is not None else 0),
+                "finish_time": round(c_job.completion_time if c_job.completion_time is not None else self.simulator.current_time, 1),
+                "node_id": c_job.allocated_node_id if c_job.allocated_node_id is not None else 0,
             })
             if len(self.completed_history) > 40:
                 self.completed_history.pop()
@@ -241,38 +241,53 @@ class ClusterServiceManager:
             "completed_history": self.completed_history,
         }
 
+    def _extract_sim_metrics(self, sim: Simulator) -> Dict[str, Any]:
+        """Extract statistical metrics from a discrete simulator instance."""
+        c_jobs = sim.completed_jobs
+        c_count = len(c_jobs)
+        if c_count > 0:
+            turnarounds = [j.turnaround_time for j in c_jobs if j.turnaround_time is not None]
+            mean_turnaround = float(np.mean(turnarounds)) if turnarounds else 0.0
+            mean_waiting = float(np.mean([j.waiting_time for j in c_jobs]))
+            miss_count = sum(1 for j in c_jobs if j.is_deadline_missed())
+            deadline_miss_pct = (miss_count / c_count) * 100.0
+        else:
+            mean_turnaround = 0.0
+            mean_waiting = 0.0
+            deadline_miss_pct = 0.0
+
+        gpu_util = sim.cluster.gpu_utilization * 100.0
+        return {
+            "completed": c_count,
+            "mean_turnaround": round(mean_turnaround, 1),
+            "mean_waiting": round(mean_waiting, 1),
+            "gpu_util_pct": round(gpu_util, 1),
+            "deadline_miss_pct": round(deadline_miss_pct, 1),
+            "makespan": round(sim.current_time, 1),
+        }
+
     def _compute_benchmark_summary(self) -> List[Dict[str, Any]]:
         """Calculate metrics across PPO and all 4 baselines."""
         all_metrics = []
 
         # 1. PPO Metrics
-        ppo_m = self.simulator.metrics.compute_summary()
+        ppo_m = self._extract_sim_metrics(self.simulator)
         all_metrics.append({
             "policy": "PPO (Reinforcement Learning)",
             "short_name": "PPO",
             "is_rl": True,
-            "completed": ppo_m.get("completed_jobs_count", 0),
-            "mean_turnaround": round(ppo_m.get("mean_turnaround_time_sec", 0.0), 1),
-            "mean_waiting": round(ppo_m.get("mean_waiting_time_sec", 0.0), 1),
-            "gpu_util_pct": round(ppo_m.get("cluster_gpu_utilization_pct", 0.0), 1),
-            "deadline_miss_pct": round(ppo_m.get("deadline_miss_rate_pct", 0.0), 1),
-            "makespan": round(ppo_m.get("makespan_sec", self.simulator.current_time), 1),
+            **ppo_m,
         })
 
         # 2. Baseline Metrics
         for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
             if b_name in self.baseline_sims:
-                b_m = self.baseline_sims[b_name].metrics.compute_summary()
+                b_m = self._extract_sim_metrics(self.baseline_sims[b_name])
                 all_metrics.append({
                     "policy": b_name,
                     "short_name": b_name,
                     "is_rl": False,
-                    "completed": b_m.get("completed_jobs_count", 0),
-                    "mean_turnaround": round(b_m.get("mean_turnaround_time_sec", 0.0), 1),
-                    "mean_waiting": round(b_m.get("mean_waiting_time_sec", 0.0), 1),
-                    "gpu_util_pct": round(b_m.get("cluster_gpu_utilization_pct", 0.0), 1),
-                    "deadline_miss_pct": round(b_m.get("deadline_miss_rate_pct", 0.0), 1),
-                    "makespan": round(b_m.get("makespan_sec", self.baseline_sims[b_name].current_time), 1),
+                    **b_m,
                 })
 
         return all_metrics
