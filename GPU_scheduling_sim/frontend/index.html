@@ -6,17 +6,18 @@
     <title>GPU Cluster Architect</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #000000;
             --surface: #0a0a0a;
             --surface-card: #0e0e10;
             --border: #222222;
-            --border-light: #333333;
+            --border-light: #383838;
             --text-white: #ffffff;
             --text-muted: #888888;
             --text-dim: #555555;
+            --active-glow: rgba(255, 255, 255, 0.22);
         }
 
         * {
@@ -39,7 +40,7 @@
 
         .main-wrapper {
             width: 100%;
-            max-width: 1560px;
+            max-width: 1680px;
             padding: 0 24px 60px 24px;
             display: flex;
             flex-direction: column;
@@ -47,7 +48,7 @@
             position: relative;
         }
 
-        /* Top Config Section (Phase 1) */
+        /* ================= PHASE 1: NODE SELECTION ================= */
         .phase-1-header {
             margin-top: 6vh;
             display: flex;
@@ -80,8 +81,8 @@
         }
 
         .bubble-btn {
-            width: 40px;
-            height: 40px;
+            width: 42px;
+            height: 42px;
             border-radius: 50%;
             background: #0f0f10;
             border: 1px solid var(--border);
@@ -109,7 +110,61 @@
             transform: scale(1.05);
         }
 
-        /* Hierarchy Diagram Viewport */
+        /* ================= PHASE 3 TOPBAR ================= */
+        .phase-3-topbar {
+            width: 100%;
+            display: none;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 28px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 14px;
+        }
+
+        .phase-3-topbar.active {
+            display: flex;
+        }
+
+        .sim-clock-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-white);
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 6px;
+        }
+
+        .benchmark-info-badge {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--border);
+            background: var(--surface-card);
+            padding: 8px 18px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+        }
+
+        .sim-controls-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* ================= DIAGRAM & PIPELINE VIEWPORT ================= */
         .diagram-viewport {
             position: relative;
             width: 100%;
@@ -123,6 +178,11 @@
         .diagram-viewport.move-up {
             transform: translateY(-80px);
             margin-top: 24px;
+        }
+
+        .diagram-viewport.phase-3-mode {
+            transform: translateY(0);
+            margin-top: 10px;
         }
 
         /* Moving Dashed Lines SVG */
@@ -149,6 +209,137 @@
             to { stroke-dashoffset: 0; }
         }
 
+        .animated-dot-line {
+            stroke: #666666;
+            stroke-width: 2;
+            stroke-dasharray: 2 6;
+            stroke-linecap: round;
+            fill: none;
+            animation: dotMove 1.5s linear infinite;
+        }
+
+        @keyframes dotMove {
+            from { stroke-dashoffset: 24; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Three-Column Pipeline Layout */
+        .pipeline-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+            gap: 24px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .task-buffer-column {
+            width: 280px;
+            background: #080809;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 560px;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .pipeline-container.active .task-buffer-column {
+            display: flex;
+            opacity: 1;
+        }
+
+        .buffer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .buffer-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-white);
+        }
+
+        .buffer-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .buffer-cards-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            max-height: 480px;
+            padding-right: 2px;
+        }
+
+        .task-item-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            font-size: 11px;
+            transition: all 0.15s ease;
+        }
+
+        .task-item-card:hover {
+            border-color: #555555;
+            background: #141416;
+        }
+
+        .task-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .task-id-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .task-type-tag {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            background: #18181b;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .task-specs-row {
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+        }
+
+        /* Center Column */
+        .center-diagram-column {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 40px;
+        }
+
         /* Orchestrator Box */
         .orchestrator-box {
             position: relative;
@@ -163,6 +354,7 @@
             justify-content: center;
             gap: 2px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+            transition: all 0.2s ease;
         }
 
         .orchestrator-title {
@@ -179,23 +371,30 @@
             color: var(--text-muted);
         }
 
-        /* Single-Line Nodes Row */
+        /* Nodes Row (1-8 nodes) */
         .nodes-row {
             position: relative;
             z-index: 10;
-            margin-top: 56px;
             width: 100%;
             display: flex;
-            align-items: stretch;
+            align-items: flex-start;
             justify-content: center;
             gap: 12px;
         }
 
-        /* Node Rectangle Box */
-        .node-rect {
+        .node-column-wrapper {
             flex: 1;
-            max-width: 155px;
-            min-width: 110px;
+            max-width: 160px;
+            min-width: 105px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 32px;
+        }
+
+        /* Node Rectangle */
+        .node-rect {
+            width: 100%;
             background: var(--surface-card);
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -204,19 +403,22 @@
             flex-direction: column;
             justify-content: space-between;
             gap: 8px;
-            min-height: 110px;
-            transition: all 0.2s ease;
+            min-height: 100px;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
+        }
+
+        .node-rect.active-executing {
+            border-color: #ffffff;
+            background: #18181c;
+            box-shadow: 0 0 18px var(--active-glow);
+            transform: scale(1.03);
         }
 
         .node-rect.drag-over {
             border-color: #ffffff;
             background: #18181c;
             box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
-        }
-
-        .node-rect:hover {
-            border-color: #555555;
         }
 
         .node-rect-top {
@@ -238,7 +440,6 @@
             color: var(--text-muted);
         }
 
-        /* Progress Bar (Capacity) */
         .node-progress-container {
             width: 100%;
             height: 4px;
@@ -254,7 +455,6 @@
             transition: width 0.2s ease;
         }
 
-        /* Resource Points Inside Node */
         .node-resources-list {
             display: flex;
             flex-direction: column;
@@ -291,11 +491,76 @@
             text-align: center;
         }
 
+        /* Physical GPU Chips Hierarchy (Phase 3) */
+        .node-gpu-chips-array {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .gpu-chip-box {
+            background: #09090b;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.25s ease;
+        }
+
+        .gpu-chip-box.chip-active {
+            border-color: #ffffff;
+            background: #18181c;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+            transform: scale(1.02);
+        }
+
+        .chip-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chip-name {
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .chip-state-tag {
+            font-size: 9px;
+            color: var(--text-muted);
+        }
+
+        .gpu-chip-box.chip-active .chip-state-tag {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .chip-vram-bar {
+            width: 100%;
+            height: 3px;
+            background: #1a1a1a;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .chip-vram-fill {
+            height: 100%;
+            background: #ffffff;
+            border-radius: 999px;
+            transition: width 0.2s ease;
+        }
+
         /* Action Buttons */
         .action-bar {
             margin-top: 40px;
             display: flex;
             justify-content: center;
+            gap: 16px;
             transition: opacity 0.3s ease;
         }
 
@@ -324,7 +589,34 @@
             transform: translateY(-1px);
         }
 
-        /* Phase 2: GPU Palette & Controls */
+        .btn-outline-white {
+            background: transparent;
+            border: 1px solid var(--border-light);
+            color: var(--text-white);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-outline-white:hover {
+            border-color: #ffffff;
+            background: #18181b;
+        }
+
+        .btn-outline-white.active-running {
+            background: #ffffff;
+            color: #000000;
+            border-color: #ffffff;
+        }
+
+        /* ================= PHASE 2: GPU PALETTE ================= */
         .phase-2-panel {
             width: 100%;
             margin-top: 28px;
@@ -333,14 +625,22 @@
             align-items: center;
             gap: 24px;
             opacity: 0;
-            transition: transform 0.4s ease, opacity 0.4s ease;
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
         }
 
         .phase-2-panel.active {
             display: flex;
             opacity: 1;
-            transform: translateY(0);
+            transform: translateX(0);
             animation: fadeIn 0.4s 0.1s forwards ease;
+        }
+
+        .phase-2-panel.slide-left {
+            transform: translateX(-100vw);
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+            display: none !important;
         }
 
         @keyframes fadeIn {
@@ -388,7 +688,6 @@
             border-color: #666666;
         }
 
-        /* 4 GPU Cards Grid */
         .gpu-cards-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -418,15 +717,10 @@
             transform: translateY(-2px);
         }
 
-        .gpu-card-item:active {
-            cursor: grabbing;
-        }
-
         .gpu-img {
             width: 80px;
             height: 60px;
             object-fit: contain;
-            filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.05));
         }
 
         .gpu-card-info {
@@ -439,44 +733,196 @@
             font-size: 13px;
             font-weight: 700;
             color: var(--text-white);
-            font-family: 'Inter', sans-serif;
         }
 
         .gpu-desc-text {
             font-size: 11px;
             color: var(--text-muted);
             line-height: 1.4;
-            font-family: 'Inter', sans-serif;
         }
 
         .phase-2-bottom-actions {
             margin-top: 10px;
             display: flex;
+            gap: 16px;
             justify-content: center;
+        }
+
+        /* ================= FINAL COMPARISON MODAL ================= */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #0a0a0c;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 960px;
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.9);
+            animation: modalFade 0.2s ease-out;
+        }
+
+        @keyframes modalFade {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .btn-close-modal {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .btn-close-modal:hover {
+            color: var(--text-white);
+        }
+
+        .diff-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .diff-table th, .diff-table td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .diff-table th {
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.05em;
+        }
+
+        .diff-table tr.row-ppo {
+            background: #141418;
+            font-weight: 700;
+        }
+
+        .diff-table tr.row-ppo td {
+            color: #ffffff;
+            border-top: 1px solid var(--border-light);
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .tag-winner {
+            background: #ffffff;
+            color: #000000;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 800;
+            margin-left: 6px;
         }
     </style>
 </head>
 <body>
     <div class="main-wrapper">
-        <!-- Phase 1: Number Selection (Slides Left on Continue) -->
+        <!-- ================= PHASE 1: NODE SELECTION (Max 8 Nodes) ================= -->
         <div class="phase-1-header" id="phase-1-header">
             <div class="title-text">Configure the number of Nodes</div>
             <div class="bubbles-row" id="bubbles-row">
-                <!-- 1 to 10 bubbles -->
+                <!-- 1 to 8 bubbles -->
             </div>
         </div>
 
-        <!-- Hierarchy Diagram Viewport -->
+        <!-- ================= PHASE 3 TOPBAR ================= -->
+        <div class="phase-3-topbar" id="phase-3-topbar">
+            <div class="sim-clock-badge" id="sim-clock-badge">
+                SIM TIME: 0.0s
+            </div>
+
+            <div class="benchmark-info-badge">
+                <span class="pulse-dot"></span>
+                Simultaneous Benchmark: PPO · FIFO · SJF · Priority · BestFit
+            </div>
+
+            <div class="sim-controls-group">
+                <button class="btn-white" id="btn-sim-step">Step (Space)</button>
+                <button class="btn-outline-white" id="btn-sim-auto">Auto-Play ▶</button>
+                <button class="btn-outline-white" id="btn-view-metrics">Final Comparison 📊</button>
+            </div>
+        </div>
+
+        <!-- ================= MAIN DIAGRAM / PIPELINE VIEWPORT ================= -->
         <div class="diagram-viewport" id="diagram-viewport">
             <svg class="lines-canvas" id="lines-canvas"></svg>
 
-            <div class="orchestrator-box" id="orchestrator-box">
-                <span class="orchestrator-title">Orchestrator Engine</span>
-                <span class="orchestrator-sub" id="orchestrator-nodes-count">3 Active Nodes</span>
-            </div>
+            <!-- Three-Column Pipeline Container -->
+            <div class="pipeline-container" id="pipeline-container">
+                <!-- LEFT COLUMN: INPUT JOB BUFFER -->
+                <div class="task-buffer-column" id="input-buffer-column">
+                    <div class="buffer-header">
+                        <span class="buffer-title">INPUT BUFFER</span>
+                        <span class="buffer-count" id="input-count-label">0 Tasks</span>
+                    </div>
+                    <div class="buffer-cards-list" id="input-cards-list">
+                        <!-- Waiting task cards -->
+                    </div>
+                </div>
 
-            <div class="nodes-row" id="nodes-row">
-                <!-- Dynamic Nodes -->
+                <!-- CENTER COLUMN: ORCHESTRATOR & NODES HIERARCHY -->
+                <div class="center-diagram-column">
+                    <div class="orchestrator-box" id="orchestrator-box">
+                        <span class="orchestrator-title">Orchestrator Engine</span>
+                        <span class="orchestrator-sub" id="orchestrator-nodes-count">3 Active Nodes</span>
+                    </div>
+
+                    <div class="nodes-row" id="nodes-row">
+                        <!-- Dynamic Nodes & attached GPU chips (1-8 nodes) -->
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: COMPLETED TASKS BUFFER -->
+                <div class="task-buffer-column" id="completed-buffer-column">
+                    <div class="buffer-header">
+                        <span class="buffer-title">COMPLETED BUFFER</span>
+                        <span class="buffer-count" id="completed-count-label">0 Done</span>
+                    </div>
+                    <div class="buffer-cards-list" id="completed-cards-list">
+                        <!-- Finished task cards -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -487,7 +933,7 @@
             </button>
         </div>
 
-        <!-- Phase 2: 4 GPU Models & Drag-Drop Panel (Appears after slide) -->
+        <!-- ================= PHASE 2: GPU PALETTE ================= -->
         <div class="phase-2-panel" id="phase-2-panel">
             <div class="phase-2-toolbar">
                 <span class="toolbar-title">Drag & Drop GPUs into Target Nodes</span>
@@ -536,20 +982,56 @@
                 </div>
             </div>
 
-            <!-- Phase 2 Bottom Actions -->
+            <!-- Phase 2 Actions -->
             <div class="phase-2-bottom-actions">
-                <button class="btn-white" id="btn-back-to-nodes">
+                <button class="btn-outline-white" id="btn-back-to-nodes">
                     ← Back to Node Config
+                </button>
+                <button class="btn-white" id="btn-launch-sim">
+                    Launch Live Simulation →
                 </button>
             </div>
         </div>
     </div>
 
+    <!-- ================= FINAL COMPARISON MODAL ================= -->
+    <div class="modal-overlay" id="metrics-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span class="modal-title">Simultaneous Multi-Policy Benchmark Results</span>
+                <button class="btn-close-modal" id="btn-close-modal">✕</button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="diff-table">
+                    <thead>
+                        <tr>
+                            <th>Scheduling Policy</th>
+                            <th>Completed Jobs</th>
+                            <th>Mean Turnaround (s)</th>
+                            <th>Mean Waiting (s)</th>
+                            <th>GPU Util (%)</th>
+                            <th>Deadline Miss (%)</th>
+                            <th>Makespan (s)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="diff-table-body">
+                        <!-- Dynamic Comparison Rows -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // State
+        // State (Max 8 Nodes)
+        let currentPhase = 1;
         let nodeCount = 3;
         let nodeGpus = []; // nodeGpus[nodeIdx] = [ { type, name, vram } ]
         let draggedGpu = null;
+
+        let isAutoPlaying = false;
+        let autoPlayInterval = null;
+        let latestBenchmarkSummary = [];
 
         const GPU_CATALOG = [
             { type: "NVIDIA-H100-80GB", name: "H100", vram: 80.0 },
@@ -558,24 +1040,41 @@
             { type: "NVIDIA-A10-24GB", name: "A10", vram: 24.0 },
         ];
 
-        // DOM
+        // DOM Elements
         const phase1Header = document.getElementById("phase-1-header");
         const diagramViewport = document.getElementById("diagram-viewport");
         const phase1ActionBar = document.getElementById("phase-1-action-bar");
         const phase2Panel = document.getElementById("phase-2-panel");
+        const phase3Topbar = document.getElementById("phase-3-topbar");
+        const pipelineContainer = document.getElementById("pipeline-container");
 
         const bubblesRow = document.getElementById("bubbles-row");
         const nodesRow = document.getElementById("nodes-row");
         const orchestratorBox = document.getElementById("orchestrator-box");
         const orchestratorNodesCount = document.getElementById("orchestrator-nodes-count");
         const linesCanvas = document.getElementById("lines-canvas");
+
         const btnConfigureGpus = document.getElementById("btn-configure-gpus");
         const btnBackToNodes = document.getElementById("btn-back-to-nodes");
+        const btnLaunchSim = document.getElementById("btn-launch-sim");
 
-        // 1. Initialize Number Bubbles 1-10
+        const simClockBadge = document.getElementById("sim-clock-badge");
+        const btnSimStep = document.getElementById("btn-sim-step");
+        const btnSimAuto = document.getElementById("btn-sim-auto");
+        const btnViewMetrics = document.getElementById("btn-view-metrics");
+        const metricsModal = document.getElementById("metrics-modal");
+        const btnCloseModal = document.getElementById("btn-close-modal");
+        const diffTableBody = document.getElementById("diff-table-body");
+
+        const inputCardsList = document.getElementById("input-cards-list");
+        const inputCountLabel = document.getElementById("input-count-label");
+        const completedCardsList = document.getElementById("completed-cards-list");
+        const completedCountLabel = document.getElementById("completed-count-label");
+
+        // ================= 1. INITIALIZE BUBBLES 1-8 =================
         function initBubbles() {
             bubblesRow.innerHTML = "";
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 8; i++) {
                 const btn = document.createElement("button");
                 btn.className = `bubble-btn ${i === nodeCount ? 'active' : ''}`;
                 btn.dataset.val = i;
@@ -585,7 +1084,6 @@
             }
         }
 
-        // 2. Set Node Count
         function setNodeCount(count) {
             nodeCount = count;
             document.querySelectorAll(".bubble-btn").forEach(btn => {
@@ -601,36 +1099,60 @@
             if (nodeGpus.length > nodeCount) nodeGpus = nodeGpus.slice(0, nodeCount);
         }
 
-        // 3. Render Nodes with Resources & Capacity Bar
-        function renderNodes() {
+        // ================= 2. RENDER NODES & PHYSICAL GPU CHIPS =================
+        function renderNodes(liveNodeStatuses = null) {
             nodesRow.innerHTML = "";
+
             for (let i = 0; i < nodeCount; i++) {
                 const gpus = nodeGpus[i] || [];
                 const filled = gpus.length;
+                const liveStatus = liveNodeStatuses ? liveNodeStatuses.find(n => n.node_id === i) : null;
+                const isExecuting = liveStatus && liveStatus.running_jobs && liveStatus.running_jobs.length > 0;
+
+                const columnWrapper = document.createElement("div");
+                columnWrapper.className = "node-column-wrapper";
+
+                // Node Chassis Card
+                const rect = document.createElement("div");
+                rect.className = `node-rect ${isExecuting ? 'active-executing' : ''}`;
+                rect.id = `node-rect-${i}`;
+
                 const pct = (filled / 8) * 100;
 
-                // Group duplicate GPUs: { "H100": 2, "A100-80": 1 }
+                // Group duplicate GPUs for Phase 1 & 2 view
                 const counts = {};
                 gpus.forEach(g => { counts[g.name] = (counts[g.name] || 0) + 1; });
 
                 let resHtml = "";
-                if (filled === 0) {
-                    resHtml = `<span class="empty-slot-msg">No GPUs Assigned</span>`;
+                if (currentPhase < 3) {
+                    if (filled === 0) {
+                        resHtml = `<span class="empty-slot-msg">No GPUs Assigned</span>`;
+                    } else {
+                        for (const [name, count] of Object.entries(counts)) {
+                            const label = count > 1 ? `${name} (x${count})` : name;
+                            resHtml += `
+                                <div class="resource-point">
+                                    <span class="point-dot"></span>
+                                    <span>${label}</span>
+                                </div>
+                            `;
+                        }
+                    }
                 } else {
-                    for (const [name, count] of Object.entries(counts)) {
-                        const label = count > 1 ? `${name} (x${count})` : name;
-                        resHtml += `
-                            <div class="resource-point">
-                                <span class="point-dot"></span>
-                                <span>${label}</span>
+                    // Phase 3: active execution text
+                    if (isExecuting) {
+                        const rj = liveStatus.running_jobs[0];
+                        resHtml = `
+                            <div class="resource-point" style="color: #ffffff; font-weight: 700;">
+                                <span class="point-dot" style="background: #ffffff;"></span>
+                                <span>Task #${rj.job_id} (${rj.progress_pct.toFixed(0)}%)</span>
                             </div>
                         `;
+                    } else {
+                        resHtml = `<span class="empty-slot-msg">Idle / Ready</span>`;
                     }
                 }
 
-                const rect = document.createElement("div");
-                rect.className = "node-rect";
-                rect.id = `node-rect-${i}`;
                 rect.innerHTML = `
                     <div class="node-rect-top">
                         <span class="node-id-label">Node ${i}</span>
@@ -659,53 +1181,329 @@
                     }
                 });
 
-                nodesRow.appendChild(rect);
+                columnWrapper.appendChild(rect);
+
+                // In Phase 3: Render Physical GPU Chips Grid Below Node
+                if (currentPhase === 3 && gpus.length > 0) {
+                    const chipsArray = document.createElement("div");
+                    chipsArray.className = "node-gpu-chips-array";
+
+                    gpus.forEach((gpu, gpuIdx) => {
+                        const chip = document.createElement("div");
+                        const liveGpu = liveStatus && liveStatus.gpus ? liveStatus.gpus[gpuIdx] : null;
+                        const isGpuBusy = liveGpu && !liveGpu.is_free;
+
+                        chip.className = `gpu-chip-box ${isGpuBusy ? 'chip-active' : ''}`;
+                        chip.id = `gpu-chip-${i}-${gpuIdx}`;
+                        chip.innerHTML = `
+                            <div class="chip-header-row">
+                                <span class="chip-name">${gpu.name}</span>
+                                <span class="chip-state-tag">${isGpuBusy ? `⚡ Task #${liveGpu.running_job_id}` : '⚪ Idle'}</span>
+                            </div>
+                            <div class="chip-vram-bar">
+                                <div class="chip-vram-fill" style="width: ${isGpuBusy ? '100%' : '0%'};"></div>
+                            </div>
+                        `;
+                        chipsArray.appendChild(chip);
+                    });
+
+                    columnWrapper.appendChild(chipsArray);
+                }
+
+                nodesRow.appendChild(columnWrapper);
             }
 
             requestAnimationFrame(() => {
-                setTimeout(drawDashedLines, 30);
+                setTimeout(drawAllAnimatedLines, 30);
             });
         }
 
         function addGpuToNode(nodeIdx, gpu) {
             if (!nodeGpus[nodeIdx]) nodeGpus[nodeIdx] = [];
-            if (nodeGpus[nodeIdx].length >= 8) {
-                return;
-            }
+            if (nodeGpus[nodeIdx].length >= 8) return;
             nodeGpus[nodeIdx].push(gpu);
             renderNodes();
         }
 
-        // 4. Draw Animated Moving Dashed Lines (Orchestrator -> Nodes)
-        function drawDashedLines() {
+        // ================= 3. ANIMATED MOVING CONNECTING LINES =================
+        function drawAllAnimatedLines() {
             linesCanvas.innerHTML = "";
             const viewportRect = diagramViewport.getBoundingClientRect();
             const orchRect = orchestratorBox.getBoundingClientRect();
 
-            const startX = orchRect.left + (orchRect.width / 2) - viewportRect.left;
-            const startY = orchRect.bottom - viewportRect.top;
+            const orchCenterX = orchRect.left + (orchRect.width / 2) - viewportRect.left;
+            const orchBottomY = orchRect.bottom - viewportRect.top;
+            const orchLeftX = orchRect.left - viewportRect.left;
+            const orchRightX = orchRect.right - viewportRect.left;
+            const orchCenterY = orchRect.top + (orchRect.height / 2) - viewportRect.top;
 
+            // Phase 3: Wire Input Buffer -> Orchestrator Box
+            if (currentPhase === 3) {
+                const inCol = document.getElementById("input-buffer-column");
+                if (inCol) {
+                    const inRect = inCol.getBoundingClientRect();
+                    const inRightX = inRect.right - viewportRect.left;
+                    const inCenterY = inRect.top + 30 - viewportRect.top;
+                    drawCurve(inRightX, inCenterY, orchLeftX, orchCenterY, "animated-dash-line");
+                }
+
+                // Phase 3: Wire Orchestrator Box -> Completed Buffer
+                const outCol = document.getElementById("completed-buffer-column");
+                if (outCol) {
+                    const outRect = outCol.getBoundingClientRect();
+                    const outLeftX = outRect.left - viewportRect.left;
+                    const outCenterY = outRect.top + 30 - viewportRect.top;
+                    drawCurve(orchRightX, orchCenterY, outLeftX, outCenterY, "animated-dash-line");
+                }
+            }
+
+            // Orchestrator -> Nodes Lines (Dashed)
             for (let i = 0; i < nodeCount; i++) {
                 const nodeEl = document.getElementById(`node-rect-${i}`);
                 if (!nodeEl) continue;
 
                 const nodeRect = nodeEl.getBoundingClientRect();
-                const endX = nodeRect.left + (nodeRect.width / 2) - viewportRect.left;
-                const endY = nodeRect.top - viewportRect.top;
+                const nodeCenterX = nodeRect.left + (nodeRect.width / 2) - viewportRect.left;
+                const nodeTopY = nodeRect.top - viewportRect.top;
+                const nodeBottomY = nodeRect.bottom - viewportRect.top;
 
-                const midY = (startY + endY) / 2;
-                const d = `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+                drawCurve(orchCenterX, orchBottomY, nodeCenterX, nodeTopY, "animated-dash-line");
 
-                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                path.setAttribute("d", d);
-                path.setAttribute("class", "animated-dash-line");
-                linesCanvas.appendChild(path);
+                // Phase 3: Node -> Attached Physical GPU Chips (Round Dotted . . .)
+                if (currentPhase === 3 && nodeGpus[i]) {
+                    nodeGpus[i].forEach((_, gpuIdx) => {
+                        const chipEl = document.getElementById(`gpu-chip-${i}-${gpuIdx}`);
+                        if (!chipEl) return;
+                        const chipRect = chipEl.getBoundingClientRect();
+                        const chipCenterX = chipRect.left + (chipRect.width / 2) - viewportRect.left;
+                        const chipTopY = chipRect.top - viewportRect.top;
+                        drawCurve(nodeCenterX, nodeBottomY, chipCenterX, chipTopY, "animated-dot-line");
+                    });
+                }
             }
         }
 
-        window.addEventListener("resize", drawDashedLines);
+        function drawCurve(x1, y1, x2, y2, className) {
+            const midY = (y1 + y2) / 2;
+            const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", d);
+            path.setAttribute("class", className);
+            linesCanvas.appendChild(path);
+        }
 
-        // 5. Drag & Drop Setup for 4 GPU Cards
+        window.addEventListener("resize", drawAllAnimatedLines);
+
+        // ================= 4. STEP 1 -> STEP 2 TRANSITION =================
+        btnConfigureGpus.addEventListener("click", () => {
+            currentPhase = 2;
+            phase1Header.classList.add("slide-left");
+            diagramViewport.classList.add("move-up");
+            phase1ActionBar.classList.add("hidden");
+            
+            phase2Panel.classList.remove("slide-left");
+            phase2Panel.classList.add("active");
+            setTimeout(drawAllAnimatedLines, 500);
+        });
+
+        btnBackToNodes.addEventListener("click", () => {
+            currentPhase = 1;
+            phase2Panel.classList.remove("active");
+            diagramViewport.classList.remove("move-up");
+            phase1Header.classList.remove("slide-left");
+            phase1ActionBar.classList.remove("hidden");
+            setTimeout(drawAllAnimatedLines, 500);
+        });
+
+        // ================= 5. STEP 2 -> STEP 3 (LAUNCH SIMULATION) =================
+        btnLaunchSim.addEventListener("click", async () => {
+            // Auto-fill unassigned nodes with balanced defaults
+            for (let i = 0; i < nodeCount; i++) {
+                if (!nodeGpus[i] || nodeGpus[i].length === 0) {
+                    nodeGpus[i] = [GPU_CATALOG[0], GPU_CATALOG[0], GPU_CATALOG[1], GPU_CATALOG[1]];
+                }
+            }
+
+            // Post Custom Cluster Setup to Backend
+            const nodeSpecs = nodeGpus.map(gpus => ({
+                gpu_type: gpus[0].type,
+                gpu_count: gpus.length,
+                vram_per_gpu_gb: gpus[0].vram,
+            }));
+
+            try {
+                await fetch("/api/cluster/setup_custom", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ nodes: nodeSpecs, scenario: "balanced", seed: 42 }),
+                });
+            } catch (err) {
+                console.error("Setup custom cluster failed:", err);
+            }
+
+            currentPhase = 3;
+
+            // Completely slide and hide Phase 2 GPU cards
+            phase2Panel.classList.remove("active");
+            phase2Panel.classList.add("slide-left");
+
+            diagramViewport.classList.remove("move-up");
+            diagramViewport.classList.add("phase-3-mode");
+            phase3Topbar.classList.add("active");
+            pipelineContainer.classList.add("active");
+
+            renderNodes();
+            await fetchSimStatus();
+            setTimeout(drawAllAnimatedLines, 500);
+        });
+
+        // ================= 6. LIVE SIMULATION ENGINE & PIPELINE UPDATES =================
+        async function fetchSimStatus() {
+            try {
+                const res = await fetch("/api/cluster/status");
+                const data = await res.json();
+                renderPipelineBuffers(data.queue, data.completed_history || []);
+                renderNodes(data.nodes);
+                simClockBadge.textContent = `SIM TIME: ${data.simulation_time.toFixed(1)}s`;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function stepSimulation() {
+            try {
+                btnSimStep.disabled = true;
+                const res = await fetch("/api/simulation/benchmark_step", { method: "POST" });
+                const result = await res.json();
+
+                latestBenchmarkSummary = result.benchmark_summary || [];
+                simClockBadge.textContent = `SIM TIME: ${result.sim_time.toFixed(1)}s`;
+
+                renderPipelineBuffers(result.cluster_status.queue, result.completed_history || []);
+                renderNodes(result.cluster_status.nodes);
+
+                if (result.is_done) {
+                    openMetricsModal();
+                    if (isAutoPlaying) toggleAutoPlay();
+                }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                btnSimStep.disabled = false;
+            }
+        }
+
+        function renderPipelineBuffers(queue, completedHistory) {
+            // 1. Input Buffer Cards
+            inputCountLabel.textContent = `${queue.length} Tasks`;
+            if (queue.length === 0) {
+                inputCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 20px 0;">Buffer Empty</span>`;
+            } else {
+                let inHtml = "";
+                queue.forEach((task) => {
+                    inHtml += `
+                        <div class="task-item-card">
+                            <div class="task-card-top">
+                                <span class="task-id-tag">Task #${task.job_id}</span>
+                                <span class="task-type-tag">${task.workload_type}</span>
+                            </div>
+                            <div class="task-specs-row">
+                                <span>${task.gpu_count}x GPUs (${task.vram_per_gpu_gb}GB)</span>
+                                <span>${task.estimated_runtime.toFixed(0)}s</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                inputCardsList.innerHTML = inHtml;
+            }
+
+            // 2. Completed Buffer Cards
+            completedCountLabel.textContent = `${completedHistory.length} Done`;
+            if (completedHistory.length === 0) {
+                completedCardsList.innerHTML = `<span class="empty-slot-msg" style="padding: 20px 0;">No Finished Tasks</span>`;
+            } else {
+                let outHtml = "";
+                completedHistory.slice(0, 15).forEach(task => {
+                    outHtml += `
+                        <div class="task-item-card">
+                            <div class="task-card-top">
+                                <span class="task-id-tag">Task #${task.job_id}</span>
+                                <span style="font-size: 10px; color: #a1a1aa;">Node ${task.node_id}</span>
+                            </div>
+                            <div class="task-specs-row">
+                                <span>Turnaround: ${task.turnaround_time}s</span>
+                                <span>Finish: ${task.finish_time}s</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                completedCardsList.innerHTML = outHtml;
+            }
+        }
+
+        function toggleAutoPlay() {
+            isAutoPlaying = !isAutoPlaying;
+            if (isAutoPlaying) {
+                btnSimAuto.classList.add("active-running");
+                btnSimAuto.textContent = "Pause ⏸";
+                // Step immediately on start
+                stepSimulation();
+                autoPlayInterval = setInterval(async () => {
+                    await stepSimulation();
+                }, 450);
+            } else {
+                btnSimAuto.classList.remove("active-running");
+                btnSimAuto.textContent = "Auto-Play ▶";
+                if (autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                }
+            }
+        }
+
+        // ================= 7. FINAL COMPARISON METRICS MODAL =================
+        function openMetricsModal() {
+            diffTableBody.innerHTML = "";
+            if (latestBenchmarkSummary.length === 0) {
+                diffTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Run simulation steps to generate benchmark comparisons.</td></tr>`;
+            } else {
+                latestBenchmarkSummary.forEach(m => {
+                    const row = document.createElement("tr");
+                    if (m.is_rl) row.className = "row-ppo";
+                    row.innerHTML = `
+                        <td>${m.policy} ${m.is_rl ? '<span class="tag-winner">PPO AGENT</span>' : ''}</td>
+                        <td>${m.completed}</td>
+                        <td>${m.mean_turnaround.toFixed(1)}s</td>
+                        <td>${m.mean_waiting.toFixed(1)}s</td>
+                        <td>${m.gpu_util_pct.toFixed(1)}%</td>
+                        <td>${m.deadline_miss_pct.toFixed(1)}%</td>
+                        <td>${m.makespan.toFixed(1)}s</td>
+                    `;
+                    diffTableBody.appendChild(row);
+                });
+            }
+            metricsModal.classList.add("open");
+        }
+
+        function closeMetricsModal() {
+            metricsModal.classList.remove("open");
+        }
+
+        // ================= EVENT LISTENERS =================
+        btnSimStep.addEventListener("click", stepSimulation);
+        btnSimAuto.addEventListener("click", toggleAutoPlay);
+        btnViewMetrics.addEventListener("click", openMetricsModal);
+        btnCloseModal.addEventListener("click", closeMetricsModal);
+        metricsModal.addEventListener("click", (e) => { if (e.target === metricsModal) closeMetricsModal(); });
+
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && currentPhase === 3 && e.target === document.body) {
+                e.preventDefault();
+                stepSimulation();
+            }
+        });
+
+        // GPU Palette Drag & Drop Setup
         document.querySelectorAll(".gpu-card-item").forEach(card => {
             card.addEventListener("dragstart", (e) => {
                 draggedGpu = {
@@ -716,7 +1514,6 @@
                 e.dataTransfer.setData("text/plain", card.dataset.type);
             });
 
-            // Click-to-add fallback (to first free node)
             card.addEventListener("click", () => {
                 const gpu = {
                     type: card.dataset.type,
@@ -729,31 +1526,12 @@
             });
         });
 
-        // 6. Transition from Phase 1 to Phase 2
-        btnConfigureGpus.addEventListener("click", () => {
-            phase1Header.classList.add("slide-left");
-            diagramViewport.classList.add("move-up");
-            phase1ActionBar.classList.add("hidden");
-            phase2Panel.classList.add("active");
-            setTimeout(drawDashedLines, 500);
-        });
-
-        // 7. Transition BACK from Phase 2 to Phase 1 (Slide Back)
-        btnBackToNodes.addEventListener("click", () => {
-            phase2Panel.classList.remove("active");
-            diagramViewport.classList.remove("move-up");
-            phase1Header.classList.remove("slide-left");
-            phase1ActionBar.classList.remove("hidden");
-            setTimeout(drawDashedLines, 500);
-        });
-
-        // 8. Random Config Button (Fills each node with realistic installed capacities: 2, 4, or 8 GPUs)
         document.getElementById("btn-random-config").addEventListener("click", () => {
             nodeGpus = [];
-            const allowedCounts = [2, 4, 8];
+            const allowed = [2, 4, 8];
             for (let i = 0; i < nodeCount; i++) {
                 const chosen = GPU_CATALOG[Math.floor(Math.random() * GPU_CATALOG.length)];
-                const count = allowedCounts[Math.floor(Math.random() * allowedCounts.length)];
+                const count = allowed[Math.floor(Math.random() * allowed.length)];
                 const list = [];
                 for (let k = 0; k < count; k++) list.push(chosen);
                 nodeGpus.push(list);
@@ -761,13 +1539,12 @@
             renderNodes();
         });
 
-        // 9. Clear Button
         document.getElementById("btn-clear-nodes").addEventListener("click", () => {
             nodeGpus = nodeGpus.map(() => []);
             renderNodes();
         });
 
-        // Initial setup
+        // Initialize
         initBubbles();
         syncNodeGpus();
         renderNodes();

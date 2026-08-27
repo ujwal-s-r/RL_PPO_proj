@@ -75,9 +75,18 @@ class ClusterServiceManager:
     def reset_dynamic(self, node_specs: List[Dict[str, Any]], scenario: str = "balanced", seed: int = 42) -> None:
         """Reset simulator with custom user-built node specifications (1 to 10 nodes)."""
         self.current_scenario = scenario
+        self.current_node_specs = node_specs
+        self.current_seed = seed
         self.cluster = Cluster.create_dynamic(node_specs)
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
         self.simulator.reset()
+
+        # Update PPO internal temp environment for custom cluster
+        if "PPO" in self.policies:
+            self.policies["PPO"] = PPOPolicyScheduler(
+                checkpoint_path=self.checkpoint_path,
+                cluster_config_path=self.cluster_config,
+            )
 
         # Load scenario jobs
         jobs = create_scenario_workload(scenario, seed=seed)
@@ -86,13 +95,26 @@ class ClusterServiceManager:
         # Advance to first scheduling decision point
         done, _ = self.simulator.step_to_next_decision()
 
+        # Also initialize simultaneous baseline simulators on identical workload clone
+        self.baseline_sims: Dict[str, Simulator] = {}
+        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+            b_cluster = Cluster.create_dynamic(node_specs)
+            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=3600.0)
+            b_sim.reset()
+            b_jobs = create_scenario_workload(scenario, seed=seed)
+            b_sim.load_workload(b_jobs)
+            b_sim.step_to_next_decision()
+            self.baseline_sims[b_name] = b_sim
+
         self.recent_logs.clear()
+        self.completed_history: List[Dict[str, Any]] = []
         self.log_event(f"Custom cluster ({len(node_specs)} Nodes) initialized with '{scenario}' scenario", level="system")
 
     def reset(self, cluster_config: str, scenario: str, seed: int = 42) -> None:
         """Reset cluster and populate initial scenario workload."""
         self.cluster_config = cluster_config
         self.current_scenario = scenario
+        self.current_seed = seed
         self.cluster = Cluster.from_yaml(self.cluster_config)
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
         self.simulator.reset()
@@ -104,7 +126,19 @@ class ClusterServiceManager:
         # Advance to first scheduling decision
         done, _ = self.simulator.step_to_next_decision()
 
+        # Initialize simultaneous baseline simulators
+        self.baseline_sims = {}
+        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+            b_cluster = Cluster.from_yaml(self.cluster_config)
+            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=3600.0)
+            b_sim.reset()
+            b_jobs = create_scenario_workload(scenario, seed=seed)
+            b_sim.load_workload(b_jobs)
+            b_sim.step_to_next_decision()
+            self.baseline_sims[b_name] = b_sim
+
         self.recent_logs.clear()
+        self.completed_history = []
         self.log_event(f"Cluster initialized with '{scenario}' scenario (seed={seed})", level="system")
 
     def submit_custom_job(self, req: JobSubmissionRequest) -> Dict[str, Any]:
@@ -142,63 +176,106 @@ class ClusterServiceManager:
             self.log_event(f"Queue full! Could not accept Job #{custom_job.job_id}", level="warning")
             return {"status": "queue_full", "job_id": custom_job.job_id}
 
-    def step_policy(self, policy_name: str) -> Dict[str, Any]:
-        """Execute one scheduling placement using the selected policy."""
-        self.active_policy_name = policy_name
-        policy = self.policies.get(policy_name, self.policies["PPO"])
+    def step_simultaneous(self) -> Dict[str, Any]:
+        """
+        Step PPO on the primary interactive simulator and advance all 4 baselines simultaneously.
+        """
+        ppo_policy = self.policies["PPO"]
         state = self.simulator.get_state()
+        action = ppo_policy.select_action(state)
 
-        action = policy.select_action(state)
+        action_taken = False
+        placed_job_id = None
+        target_node_id = None
 
-        if action is None:
-            # Advance simulator time to next event
-            done, completed = self.simulator.step_to_next_decision()
-            for c_job in completed:
-                self.log_event(
-                    f"Job #{c_job.job_id} ({c_job.gpu_count}x GPUs) COMPLETED in {c_job.actual_runtime:.0f}s (JCT: {c_job.turnaround_time:.1f}s)",
-                    level="info",
-                )
-            return {
-                "action_taken": False,
-                "reason": "No feasible placement right now. Simulation advanced.",
-                "policy": policy_name,
-                "sim_time": self.simulator.current_time,
-            }
+        if action is not None:
+            job_idx, node_idx = action
+            job = state.queue.get_at(job_idx)
+            if job and self.simulator.apply_action(job_idx, node_idx):
+                action_taken = True
+                placed_job_id = job.job_id
+                target_node_id = node_idx
 
-        job_idx, node_idx = action
-        job = state.queue.get_at(job_idx)
-        node = state.cluster.get_node(node_idx)
-
-        job_id_desc = job.job_id if job else "N/A"
-        gpu_req = job.gpu_count if job else 0
-        node_type = node.gpu_type if node else "Node"
-
-        # Apply placement action
-        success = self.simulator.apply_action(job_idx, node_idx)
-        if success:
-            self.log_event(
-                f"[{policy_name}] Placed Job #{job_id_desc} ({gpu_req}x GPUs) -> Node {node_idx} ({node_type})",
-                level="action",
-            )
-        else:
-            self.log_event(f"[{policy_name}] Infeasible placement attempted on Node {node_idx}", level="warning")
-
-        # Advance event queue
+        # Advance PPO simulator
         done, completed = self.simulator.step_to_next_decision()
         for c_job in completed:
-            self.log_event(
-                f"Job #{c_job.job_id} ({c_job.gpu_count}x GPUs) COMPLETED in {c_job.actual_runtime:.0f}s (JCT: {c_job.turnaround_time:.1f}s)",
-                level="info",
-            )
+            self.completed_history.insert(0, {
+                "job_id": c_job.job_id,
+                "gpu_count": c_job.gpu_count,
+                "vram_gb": c_job.vram_per_gpu_gb,
+                "turnaround_time": round(c_job.turnaround_time, 1),
+                "waiting_time": round(c_job.waiting_time, 1),
+                "workload_type": c_job.workload_type.value if hasattr(c_job.workload_type, "value") else str(c_job.workload_type),
+                "finish_time": round(self.simulator.current_time, 1),
+                "node_id": getattr(c_job, "node_id", target_node_id if target_node_id is not None else 0),
+            })
+            if len(self.completed_history) > 40:
+                self.completed_history.pop()
+
+        # Step all 4 baselines simultaneously up to current simulation timestamp
+        current_t = self.simulator.current_time
+        for b_name, b_sim in self.baseline_sims.items():
+            b_policy = self.policies[b_name]
+            # Step until caught up or finished
+            for _ in range(20):
+                if b_sim.current_time >= current_t:
+                    break
+                b_state = b_sim.get_state()
+                b_act = b_policy.select_action(b_state)
+                if b_act is not None:
+                    b_sim.apply_action(*b_act)
+                b_done, _ = b_sim.step_to_next_decision()
+                if b_done:
+                    break
+
+        # Compute live comparative metrics
+        benchmark_summary = self._compute_benchmark_summary()
 
         return {
-            "action_taken": True,
-            "job_id": job_id_desc,
-            "node_id": node_idx,
-            "policy": policy_name,
+            "action_taken": action_taken,
+            "job_id": placed_job_id,
+            "node_id": target_node_id,
             "sim_time": self.simulator.current_time,
             "is_done": done,
+            "benchmark_summary": benchmark_summary,
+            "completed_history": self.completed_history,
         }
+
+    def _compute_benchmark_summary(self) -> List[Dict[str, Any]]:
+        """Calculate metrics across PPO and all 4 baselines."""
+        all_metrics = []
+
+        # 1. PPO Metrics
+        ppo_m = self.simulator.metrics.compute_summary()
+        all_metrics.append({
+            "policy": "PPO (Reinforcement Learning)",
+            "short_name": "PPO",
+            "is_rl": True,
+            "completed": ppo_m.get("completed_jobs_count", 0),
+            "mean_turnaround": round(ppo_m.get("mean_turnaround_time_sec", 0.0), 1),
+            "mean_waiting": round(ppo_m.get("mean_waiting_time_sec", 0.0), 1),
+            "gpu_util_pct": round(ppo_m.get("cluster_gpu_utilization_pct", 0.0), 1),
+            "deadline_miss_pct": round(ppo_m.get("deadline_miss_rate_pct", 0.0), 1),
+            "makespan": round(ppo_m.get("makespan_sec", self.simulator.current_time), 1),
+        })
+
+        # 2. Baseline Metrics
+        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+            if b_name in self.baseline_sims:
+                b_m = self.baseline_sims[b_name].metrics.compute_summary()
+                all_metrics.append({
+                    "policy": b_name,
+                    "short_name": b_name,
+                    "is_rl": False,
+                    "completed": b_m.get("completed_jobs_count", 0),
+                    "mean_turnaround": round(b_m.get("mean_turnaround_time_sec", 0.0), 1),
+                    "mean_waiting": round(b_m.get("mean_waiting_time_sec", 0.0), 1),
+                    "gpu_util_pct": round(b_m.get("cluster_gpu_utilization_pct", 0.0), 1),
+                    "deadline_miss_pct": round(b_m.get("deadline_miss_rate_pct", 0.0), 1),
+                    "makespan": round(b_m.get("makespan_sec", self.baseline_sims[b_name].current_time), 1),
+                })
+
+        return all_metrics
 
     def get_status(self) -> ClusterStatusResponse:
         """Construct full diagnostic state payload."""

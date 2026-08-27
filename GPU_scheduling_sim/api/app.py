@@ -71,24 +71,21 @@ def submit_job(req: JobSubmissionRequest) -> Dict[str, Any]:
     return service.submit_custom_job(req)
 
 
-@app.post("/api/schedule/step")
-def schedule_step(req: ScheduleStepRequest) -> Dict[str, Any]:
-    """Execute one scheduling decision using the specified policy."""
-    return service.step_policy(req.policy)
+@app.post("/api/simulation/benchmark_step")
+def simulation_benchmark_step() -> Dict[str, Any]:
+    """Execute simultaneous multi-policy simulation step (PPO + FIFO + SJF + Priority + BestFit)."""
+    step_res = service.step_simultaneous()
+    cluster_status = service.get_status()
+    return {
+        **step_res,
+        "cluster_status": cluster_status.dict(),
+    }
 
 
-@app.post("/api/cluster/reset")
-def reset_cluster(req: ClusterResetRequest) -> Dict[str, Any]:
-    """Reset the cluster simulation with a specific scenario and seed."""
-    service.reset(req.cluster_config, req.scenario, seed=req.seed)
-    return {"status": "reset_successful", "scenario": req.scenario, "seed": req.seed}
-
-
-@app.post("/api/cluster/setup_custom")
-def setup_custom_cluster(req: CustomClusterSetupRequest) -> Dict[str, Any]:
-    """Setup custom 1-10 node cluster topology built interactively by user."""
-    service.reset_dynamic(req.nodes, scenario=req.scenario, seed=req.seed)
-    return {"status": "custom_setup_successful", "nodes_count": len(req.nodes), "scenario": req.scenario}
+@app.get("/api/simulation/completed")
+def get_completed_tasks() -> Dict[str, Any]:
+    """Retrieve history of finished tasks."""
+    return {"completed_tasks": service.completed_history}
 
 
 # Mount Frontend static assets
