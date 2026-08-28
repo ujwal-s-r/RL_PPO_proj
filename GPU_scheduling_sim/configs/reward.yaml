@@ -1,9 +1,11 @@
-# Decima-Style Multi-Objective GPU Cluster Scheduling Reward:
-utilization_weight: 2.00          # Continuous +2.0 * (active_gpus / total_gpus) per step
-completion_weight: 1.50           # Base completion reward
-turnaround_efficiency_weight: 1.50 # Priority-weighted JCT speedup (runtime / turnaround)
-slowdown_penalty_weight: 0.10     # Normalized bounded slowdown penalty for queue backlog
-deadline_miss_weight: 4.00        # Balanced SLA protection penalty
-invalid_action_penalty: 2.00      # Rejection penalty for invalid action attempts
-step_penalty: 0.005               # Step penalty to encourage rapid draining
-fragmentation_bonus_weight: 0.50  # Bonus for perfectly filling stranded node GPUs
+# Decima / DeepRM Demand-Gated Time-Integral GPU Scheduling Reward:
+slowdown_weight: 3.00             # Dominant term: -slowdown_weight * normalized slowdown on job completion
+completion_weight: 1.00           # Base completion reward per finished job
+deadline_miss_weight: 5.00        # Strict penalty for missing deadline (priority scaled)
+deadline_near_miss_bonus: 0.50    # Bonus for completing within deadline
+queue_wait_weight: 0.50           # Continuous penalty for delta integrated queue wait seconds
+idle_gpu_penalty_weight: 0.20     # Demand-gated penalty for idle GPUs (active ONLY when jobs are waiting in queue)
+starvation_penalty_weight: 0.30   # Fairness guard: penalizes jobs waiting >3x their estimated runtime
+fragmentation_bonus_weight: 0.25  # Bin-packing bonus for zero stranded GPUs on a node
+invalid_action_penalty: 1.00      # Action rejection penalty
+step_penalty: 0.002               # Small step cost to encourage rapid draining

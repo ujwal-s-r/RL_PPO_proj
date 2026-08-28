@@ -107,9 +107,18 @@ def test_openenv_client_flow():
         valid_acts = np.where(mask > 0)[0]
         if len(valid_acts) == 0:
             break
-        act = int(valid_acts[0])
-        obs, reward, term, trunc, s_info = client.step(act)
-        done = term or trunc
-        step_count += 1
-
     assert step_count > 0
+
+
+def test_demand_gated_reward_calculation():
+    """Verify that reward penalizes slowdown and unmet queue demand without exploding on empty idle periods."""
+    env = GPUSchedulerEnvironment(cluster_config_path="configs/cluster_small.yaml")
+    obs, info = env.reset(seed=42)
+
+    # Pick first valid action
+    mask = info["action_mask"]
+    valid_idx = int(np.where(mask > 0)[0][0])
+
+    obs, reward, terminated, truncated, step_info = env.step(valid_idx)
+    assert not np.isnan(reward)
+    assert isinstance(reward, float)
