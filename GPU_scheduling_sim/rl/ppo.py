@@ -50,9 +50,11 @@ class PPO:
         entropy_losses = []
         approx_kls = []
         clip_fractions = []
+        actor_grad_norms = []
+        critic_grad_norms = []
 
         for _ in range(self.config.epochs_per_update):
-            for mb_obs, mb_actions, mb_old_log_probs, mb_returns, mb_advantages, mb_masks in buffer.get_minibatch_generator(self.config.minibatch_size):
+            for mb_obs, mb_actions, mb_old_log_probs, mb_returns, mb_advantages, mb_masks, mb_old_values in buffer.get_minibatch_generator(self.config.minibatch_size):
                 # Evaluate current policy on minibatch
                 new_log_probs, new_values, entropy = self.actor_critic.evaluate_actions(
                     obs=mb_obs,
@@ -71,6 +73,10 @@ class PPO:
                     clipped = ((ratio - 1.0).abs() > self.config.clip_ratio).float().mean()
                     clip_fractions.append(clipped.item())
 
+                # KL Early Stopping: prevent destructive policy updates
+                if self.config.target_kl is not None and approx_kl.item() > (1.5 * self.config.target_kl):
+                    break
+
                 # 1. Clipped Surrogate Policy Loss
                 surr1 = -mb_advantages * ratio
                 surr2 = -mb_advantages * torch.clamp(
@@ -80,8 +86,15 @@ class PPO:
                 )
                 policy_loss = torch.max(surr1, surr2).mean()
 
-                # 2. Value Function Loss (MSE)
-                value_loss = 0.5 * ((new_values - mb_returns) ** 2).mean()
+                # 2. PPO2 Value Function Loss with Clipping
+                v_pred_clipped = mb_old_values + torch.clamp(
+                    new_values - mb_old_values,
+                    -self.config.clip_ratio,
+                    self.config.clip_ratio,
+                )
+                v_loss_unclipped = (new_values - mb_returns) ** 2
+                v_loss_clipped = (v_pred_clipped - mb_returns) ** 2
+                value_loss = 0.5 * torch.max(v_loss_unclipped, v_loss_clipped).mean()
 
                 # 3. Entropy Bonus
                 entropy_loss = entropy.mean()
@@ -93,10 +106,28 @@ class PPO:
                     - (self.config.entropy_coef * entropy_loss)
                 )
 
-                # Gradient Step
+                # Backward pass
                 self.optimizer.zero_grad()
                 total_loss.backward()
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.config.max_grad_norm)
+
+                # Diagnostic: calculate pre-clip gradient norms
+                with torch.no_grad():
+                    a_grads = [p.grad.detach() for p in self.actor_critic.pair_scorer.parameters() if p.grad is not None]
+                    c_grads = [p.grad.detach() for p in self.actor_critic.critic_head.parameters() if p.grad is not None]
+                    a_norm = torch.norm(torch.stack([torch.norm(g, 2) for g in a_grads]), 2).item() if a_grads else 0.0
+                    c_norm = torch.norm(torch.stack([torch.norm(g, 2) for g in c_grads]), 2).item() if c_grads else 0.0
+                    actor_grad_norms.append(a_norm)
+                    critic_grad_norms.append(c_norm)
+
+                # Separate Gradient Clipping for Actor and Critic to prevent Critic from starving Actor
+                max_norm = self.config.max_grad_norm
+                nn.utils.clip_grad_norm_(self.actor_critic.pair_scorer.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.critic_head.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.node_proj.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.queue_proj.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.global_proj.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.cross_attn.parameters(), max_norm)
+
                 self.optimizer.step()
 
                 pg_losses.append(policy_loss.item())
@@ -109,6 +140,8 @@ class PPO:
             "entropy": float(sum(entropy_losses) / len(entropy_losses)),
             "approx_kl": float(sum(approx_kls) / len(approx_kls)),
             "clip_fraction": float(sum(clip_fractions) / len(clip_fractions)),
+            "actor_grad_norm": float(sum(actor_grad_norms) / len(actor_grad_norms)) if actor_grad_norms else 0.0,
+            "critic_grad_norm": float(sum(critic_grad_norms) / len(critic_grad_norms)) if critic_grad_norms else 0.0,
         }
 
     def save_checkpoint(self, path: str, extra_metadata: Optional[Dict[str, Any]] = None) -> None:

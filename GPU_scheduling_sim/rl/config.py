@@ -28,6 +28,7 @@ class PPOConfig:
     entropy_coef: float = 0.01
     value_coef: float = 0.5
     max_grad_norm: float = 0.5
+    target_kl: Optional[float] = 0.03 # Early stopping KL threshold per update to prevent policy collapse
 
     # Vectorized Rollout & Optimization Batching
     num_envs: int = 16              # 16 Parallel CPU simulator workers for 2x faster trajectory collection

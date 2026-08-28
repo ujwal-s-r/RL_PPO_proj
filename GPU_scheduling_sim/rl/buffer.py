@@ -110,6 +110,7 @@ class RolloutBuffer:
         flat_returns = self.returns.reshape(-1)
         flat_advantages = self.advantages.reshape(-1)
         flat_masks = self.masks.reshape(-1, self.action_dim)
+        flat_values = self.values.reshape(-1)
 
         # Normalize advantages across the full rollout batch for stable policy updates
         adv_mean = flat_advantages.mean()
@@ -130,4 +131,5 @@ class RolloutBuffer:
                 flat_returns[mb_inds],
                 flat_advantages[mb_inds],
                 flat_masks[mb_inds],
+                flat_values[mb_inds],
             )

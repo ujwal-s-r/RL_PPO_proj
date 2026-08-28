@@ -34,6 +34,8 @@ class PPOTrainer:
             reward_config_path=config.reward_config,
             scenario_name=config.scenario,
             base_seed=config.seed,
+            max_nodes=config.max_nodes,
+            max_queue_size=config.max_queue_size,
         )
 
         self.obs_dim = self.vec_env.obs_dim
@@ -54,6 +56,8 @@ class PPOTrainer:
             cluster_config_path=config.cluster_config,
             reward_config_path=config.reward_config,
             scenario_name=config.scenario,
+            max_nodes=config.max_nodes,
+            max_queue_size=config.max_queue_size,
         )
 
     def train(self, progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, List[Any]]:
@@ -149,14 +153,17 @@ class PPOTrainer:
 
             fps = int(total_steps / max(1.0, time.time() - start_time))
             if update_count % 5 == 0 or total_steps >= cfg.total_timesteps:
+                a_gn = loss_dict.get("actor_grad_norm", 0.0)
+                c_gn = loss_dict.get("critic_grad_norm", 0.0)
                 print(
                     f"Step {total_steps:06d}/{cfg.total_timesteps} | "
                     f"FPS: {fps} | "
-                    f"Mean Rew: {recent_reward:+7.2f} | "
-                    f"Loss(P): {loss_dict['policy_loss']:.4f} | "
+                    f"Mean Rew: {recent_reward:+6.2f} | "
+                    f"Loss(P): {loss_dict['policy_loss']:+.4f} | "
                     f"Loss(V): {loss_dict['value_loss']:.4f} | "
                     f"Entropy: {loss_dict['entropy']:.3f} | "
-                    f"KL: {loss_dict['approx_kl']:.4f}"
+                    f"KL: {loss_dict['approx_kl']:.4f} | "
+                    f"Grad(A/C): {a_gn:.3f}/{c_gn:.3f}"
                 )
 
             # 4. Periodic Best & Stepped Checkpoint Saving

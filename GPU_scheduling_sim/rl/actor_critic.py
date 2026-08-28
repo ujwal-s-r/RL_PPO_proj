@@ -69,7 +69,7 @@ class ActorCritic(nn.Module):
             nn.GELU(),
             layer_init(nn.Linear(128, 64)),
             nn.GELU(),
-            layer_init(nn.Linear(64, 1), std=0.01),
+            layer_init(nn.Linear(64, 1), std=0.10),
         )
 
         # 4. Value Head (Critic) with entity pooling

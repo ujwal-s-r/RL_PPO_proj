@@ -22,10 +22,14 @@ class SyncVectorEnv:
         reward_config_path: str = "configs/reward.yaml",
         scenario_name: str = "balanced",
         base_seed: int = 42,
+        max_nodes: int = 8,
+        max_queue_size: int = 16,
     ) -> None:
         self.num_envs = num_envs
         self.base_seed = base_seed
         self.scenario_name = scenario_name
+        self.max_nodes = max_nodes
+        self.max_queue_size = max_queue_size
 
         # If scenario_name is "all" or "random", assign different benchmark scenarios across workers
         from workloads.scenarios import list_scenarios
@@ -44,6 +48,8 @@ class SyncVectorEnv:
                 cluster_config_path=cluster_config_path,
                 reward_config_path=reward_config_path,
                 scenario_name=self.env_scenarios[i],
+                max_nodes=max_nodes,
+                max_queue_size=max_queue_size,
             )
             for i in range(num_envs)
         ]
