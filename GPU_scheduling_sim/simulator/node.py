@@ -2,9 +2,56 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+import numpy as np
 from simulator.gpu import GPU
 from simulator.job import Job
+
+
+# Hardware Execution Speed Matrix relative to reference A100-PCIE-40GB (1.0x)
+GPU_SPEED_MULTIPLIERS: Dict[str, Dict[str, float]] = {
+    "TRAINING": {
+        "NVIDIA-H100-80GB": 0.65,
+        "A100-SXM4-80GB": 0.80,
+        "A100-PCIE-40GB": 1.00,
+        "NVIDIA-A10-24GB": 1.75,
+    },
+    "FINE_TUNING": {
+        "NVIDIA-H100-80GB": 0.70,
+        "A100-SXM4-80GB": 0.85,
+        "A100-PCIE-40GB": 1.00,
+        "NVIDIA-A10-24GB": 1.50,
+    },
+    "INFERENCE": {
+        "NVIDIA-H100-80GB": 0.85,
+        "A100-SXM4-80GB": 0.95,
+        "A100-PCIE-40GB": 1.00,
+        "NVIDIA-A10-24GB": 1.15,
+    },
+    "EVALUATION": {
+        "NVIDIA-H100-80GB": 0.80,
+        "A100-SXM4-80GB": 0.90,
+        "A100-PCIE-40GB": 1.00,
+        "NVIDIA-A10-24GB": 1.35,
+    },
+}
+
+def get_gpu_speed_multiplier(workload_type: Any, gpu_types: List[str]) -> float:
+    """Calculate average execution speed multiplier across assigned GPUs."""
+    wt_key = workload_type.name if hasattr(workload_type, "name") else str(workload_type).upper()
+    if "TRAIN" in wt_key:
+        table = GPU_SPEED_MULTIPLIERS["TRAINING"]
+    elif "TUNE" in wt_key:
+        table = GPU_SPEED_MULTIPLIERS["FINE_TUNING"]
+    elif "INFER" in wt_key:
+        table = GPU_SPEED_MULTIPLIERS["INFERENCE"]
+    else:
+        table = GPU_SPEED_MULTIPLIERS["EVALUATION"]
+
+    if not gpu_types:
+        return 1.0
+    mults = [table.get(gt, 1.0) for gt in gpu_types]
+    return float(np.mean(mults))
 
 
 @dataclass
@@ -98,6 +145,7 @@ class Node:
         """
         Allocate matching GPUs on this node for the job.
         Sorts free GPUs by VRAM ascending to pick the tightest fit (saving high-VRAM GPUs for bigger tasks).
+        Adjusts job execution runtime based on assigned GPU hardware architecture speed.
         """
         matching_free = [g for g in self.available_gpus if g.total_vram_gb >= job.vram_per_gpu_gb]
         if len(matching_free) < job.gpu_count:
@@ -120,6 +168,11 @@ class Node:
                     self.gpus[g_id].release()
                 raise RuntimeError(f"Failed to allocate GPU {gpu.gpu_id} on Node {self.node_id}")
             assigned_gpu_ids.append(gpu.gpu_id)
+
+        # Apply GPU architecture hardware speed factor
+        assigned_gpu_types = [self.gpus[g_id].gpu_type for g_id in assigned_gpu_ids]
+        speed_multiplier = get_gpu_speed_multiplier(job.workload_type, assigned_gpu_types)
+        job.actual_runtime = max(5.0, round(job.actual_runtime * speed_multiplier, 2))
 
         job.mark_started(current_time, self.node_id, assigned_gpu_ids)
         self.running_jobs[job.job_id] = job

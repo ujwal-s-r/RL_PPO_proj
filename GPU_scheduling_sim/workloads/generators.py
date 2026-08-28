@@ -99,53 +99,55 @@ class WorkloadGenerator:
 
             wt_str = workload_type.value if hasattr(workload_type, "value") else str(workload_type).lower()
 
-            # 1. Tier-1 Production Training: High priority (8-10), high VRAM, tighter SLA
+            # 1. Tier-1 Production Training: High priority (8-10), high VRAM, strict SLA
             if "train" in wt_str:
                 vram_gb = float(rng.choice([40.0, 80.0]))
                 gpu_count = int(rng.choice([2, 4, 8], p=[0.25, 0.45, 0.30]))
                 priority = int(rng.choice([8, 9, 10]))
-                slack_min, slack_max = 1.4, 2.3
+                # Heavy-tailed estimation error (training runs often underestimate duration)
+                estimate_factor = float(rng.lognormal(mean=-0.10, sigma=0.45))
+                # Decoupled Service-Class SLA target: 300s to 1200s
+                sla_target = float(rng.uniform(300.0, 1200.0))
 
             # 2. Tier-2 Fine-Tuning: Mid priority (6-8), mid VRAM
             elif "tune" in wt_str or "tuning" in wt_str:
                 vram_gb = float(rng.choice([24.0, 40.0, 80.0]))
                 gpu_count = int(rng.choice([1, 2, 4], p=[0.40, 0.40, 0.20]))
                 priority = int(rng.choice([6, 7, 8]))
-                slack_min, slack_max = 1.8, 3.0
+                estimate_factor = float(rng.lognormal(mean=0.00, sigma=0.35))
+                sla_target = float(rng.uniform(600.0, 2400.0))
 
             # 3. Tier-2 Evaluation: Mid-low priority (4-6), fast/medium
             elif "eval" in wt_str:
                 vram_gb = float(rng.choice([16.0, 24.0, 40.0]))
                 gpu_count = int(rng.choice([1, 2], p=[0.70, 0.30]))
                 priority = int(rng.choice([4, 5, 6]))
-                slack_min, slack_max = 2.0, 3.5
+                estimate_factor = float(rng.lognormal(mean=0.05, sigma=0.25))
+                sla_target = float(rng.uniform(1200.0, 3600.0))
 
             # 4. Tier-3 Spot Inference & Batch Experiments: Low priority (1-4), 1-2 GPUs, loose SLA (gap fillers)
             else:
                 vram_gb = float(rng.choice([16.0, 24.0]))
                 gpu_count = 1
                 priority = int(rng.choice([1, 2, 3, 4]))
-                slack_min, slack_max = 3.0, 5.5
+                estimate_factor = float(rng.lognormal(mean=0.00, sigma=0.15))
+                sla_target = float(rng.uniform(60.0, 300.0)) if "infer" in wt_str else float(rng.uniform(1800.0, 7200.0))
 
-            actual_runtime, estimated_runtime = sampler.sample_runtime(
+            actual_runtime, _ = sampler.sample_runtime(
                 lognorm_mean=self.config.runtime_lognorm_mean,
                 lognorm_sigma=self.config.runtime_lognorm_sigma,
                 min_sec=self.config.runtime_min_sec,
                 max_sec=self.config.runtime_max_sec,
             )
-            deadline = sampler.sample_deadline(
-                arrival_time=current_time,
-                actual_runtime=actual_runtime,
-                slack_min=slack_min,
-                slack_max=slack_max,
-            )
+            estimated_runtime = max(5.0, round(actual_runtime * estimate_factor, 2))
+            deadline = current_time + max(actual_runtime * 1.1, sla_target)
 
             job = Job(
                 job_id=job_id_counter,
                 arrival_time=round(current_time, 2),
                 gpu_count=gpu_count,
                 vram_per_gpu_gb=vram_gb,
-                estimated_runtime=round(estimated_runtime, 2),
+                estimated_runtime=estimated_runtime,
                 actual_runtime=round(actual_runtime, 2),
                 priority=priority,
                 deadline=round(deadline, 2),

@@ -28,7 +28,8 @@ class JobQueue:
 
     @property
     def is_full(self) -> bool:
-        # Unlimited queue: never full, zero drops
+        if self.max_size is not None and self.max_size > 0:
+            return len(self._jobs) >= self.max_size
         return False
 
     def push(self, job: Job) -> bool:

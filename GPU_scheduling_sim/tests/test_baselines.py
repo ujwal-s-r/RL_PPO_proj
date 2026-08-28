@@ -84,3 +84,29 @@ def test_baseline_runner_episode():
     assert metrics.completed_jobs > 0
     assert metrics.invalid_action_count == 0
     assert metrics.mean_jct > 0
+
+
+def test_sjf_backfill_logic():
+    from baselines.sjf_backfill import SJFBackfillScheduler
+    cluster = Cluster.from_yaml("configs/cluster_small.yaml")
+    sim = Simulator(cluster=cluster, max_queue_size=8)
+    sim.reset()
+
+    # Place a long 4-GPU job on Node 0
+    j_long = Job(1, arrival_time=0.0, gpu_count=4, vram_per_gpu_gb=30.0, estimated_runtime=500.0, actual_runtime=500.0)
+    sim.queue.push(j_long)
+    sim.apply_action(0, 0) # Node 0 now full
+
+    # Queue contains: Job 2 (needs 4 GPUs @ 40GB, can't fit on Node 1 which has 24GB VRAM)
+    # and Job 3 (needs 2 GPUs @ 20GB, 10s runtime, fits on Node 1)
+    j2 = Job(2, arrival_time=0.0, gpu_count=4, vram_per_gpu_gb=35.0, estimated_runtime=50.0, actual_runtime=50.0)
+    j3 = Job(3, arrival_time=0.0, gpu_count=2, vram_per_gpu_gb=20.0, estimated_runtime=10.0, actual_runtime=10.0)
+    sim.queue.push(j2)
+    sim.queue.push(j3)
+
+    bf = SJFBackfillScheduler()
+    act = bf.select_action(sim.get_state())
+    assert act is not None
+    # Head job j2 cannot fit on Node 1, so backfill selects j3 (index 1) on Node 1 (index 1)
+    assert act[0] == 1
+    assert act[1] == 1
