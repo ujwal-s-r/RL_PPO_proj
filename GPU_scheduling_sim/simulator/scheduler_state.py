@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from simulator.cluster import Cluster
 from simulator.queue import JobQueue
@@ -19,6 +19,7 @@ class SchedulerState:
     completed_jobs_count: int
     total_jobs_arrived: int
     horizon_time: float
+    next_arrival: Tuple[float, float, float] = (3600.0, 0.0, 0.0)
 
     @property
     def num_nodes(self) -> int:

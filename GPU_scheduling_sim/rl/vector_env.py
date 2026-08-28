@@ -63,9 +63,10 @@ class SyncVectorEnv:
         mask_list = []
 
         for i, env in enumerate(self.envs):
+            is_random = (i % 2 == 1) # Alternate 50% fixed target cluster, 50% random topology
             obs, info = env.reset(
                 seed=self._current_seeds[i],
-                options={"scenario": self.env_scenarios[i], "random_topology": True},
+                options={"scenario": self.env_scenarios[i], "random_topology": is_random},
             )
             obs_list.append(obs)
             mask_list.append(info["action_mask"])
@@ -100,14 +101,15 @@ class SyncVectorEnv:
             done = terminated or truncated
 
             if done:
-                # Auto-reset with next seed; if mixed, rotate scenario and randomize 1-10 cluster topology
+                # Auto-reset with next seed; 50% target cluster, 50% random topology
                 self._current_seeds[i] += 1
                 if self.scenario_name in ["all", "random", "mixed"]:
                     self.env_scenarios[i] = np.random.choice(all_scenarios)
 
+                is_random = (np.random.random() < 0.5)
                 reset_obs, reset_info = env.reset(
                     seed=self._current_seeds[i],
-                    options={"scenario": self.env_scenarios[i], "random_topology": True}
+                    options={"scenario": self.env_scenarios[i], "random_topology": is_random}
                 )
                 next_obs_list.append(reset_obs)
                 masks_list.append(reset_info["action_mask"])

@@ -85,6 +85,7 @@ class PPOTrainer:
 
         episode_rewards: List[float] = []
         current_ep_rewards = np.zeros(cfg.num_envs)
+        best_mean_reward = -float("inf")
 
         print(f"Starting PPO Training on [{cfg.device.upper()}] with {cfg.num_envs} Parallel Envs...")
         print(f"Total target timesteps: {cfg.total_timesteps:,} (Batch size per update: {cfg.num_envs * cfg.rollout_length})\n")
@@ -158,7 +159,12 @@ class PPOTrainer:
                     f"KL: {loss_dict['approx_kl']:.4f}"
                 )
 
-            # 4. Periodic Checkpoint Saving
+            # 4. Periodic Best & Stepped Checkpoint Saving
+            if recent_reward > best_mean_reward and total_steps >= (cfg.num_envs * cfg.rollout_length * 2):
+                best_mean_reward = recent_reward
+                best_ckpt = os.path.join(cfg.checkpoint_dir, "ppo_best.pt")
+                self.agent.save_checkpoint(best_ckpt, {"total_steps": total_steps, "mean_reward": recent_reward})
+
             if total_steps % cfg.save_freq_steps < (cfg.num_envs * cfg.rollout_length):
                 ckpt_path = os.path.join(cfg.checkpoint_dir, f"ppo_step_{total_steps}.pt")
                 self.agent.save_checkpoint(ckpt_path, {"total_steps": total_steps, "mean_reward": recent_reward})
@@ -166,9 +172,9 @@ class PPOTrainer:
             if progress_callback:
                 progress_callback({"step": total_steps, "metrics": loss_dict, "mean_reward": recent_reward})
 
-        # Save Final Checkpoint
+        # Save Final Checkpoint (also save as ppo_final.pt)
         final_ckpt = os.path.join(cfg.checkpoint_dir, "ppo_final.pt")
-        self.agent.save_checkpoint(final_ckpt, {"total_steps": total_steps, "mean_reward": recent_reward})
-        print(f"\nTraining Complete! Saved final model to '{final_ckpt}'")
+        self.agent.save_checkpoint(final_ckpt, {"total_steps": total_steps, "mean_reward": recent_reward, "best_reward": best_mean_reward})
+        print(f"\nTraining Complete! Saved model to '{final_ckpt}' (Best Mean Reward: {best_mean_reward:+.2f})")
 
         return history

@@ -213,7 +213,8 @@ class Simulator:
             max_queue_size=self.max_queue_size,
             completed_jobs_count=len(self.completed_jobs),
             total_jobs_arrived=len(self.submitted_jobs),
-            horizon_time=self.horizon_seconds,
+            horizon_time=self.horizon_seconds if self.horizon_seconds is not None else 100000.0,
+            next_arrival=self.peek_next_arrival(),
         )
 
     def get_metrics(self) -> Dict[str, Any]:

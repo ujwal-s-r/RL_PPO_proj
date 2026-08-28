@@ -96,6 +96,21 @@ def simulation_benchmark_step() -> Dict[str, Any]:
     }
 
 
+@app.post("/api/simulation/fast_forward")
+def simulation_fast_forward() -> Dict[str, Any]:
+    """Fast forward simulation to complete all workload jobs immediately."""
+    step_res = {}
+    for _ in range(500):
+        step_res = service.step_simultaneous()
+        if step_res.get("is_done", False):
+            break
+    cluster_status = service.get_status()
+    return {
+        **step_res,
+        "cluster_status": cluster_status.dict(),
+    }
+
+
 @app.get("/api/simulation/completed")
 def get_completed_tasks() -> Dict[str, Any]:
     """Retrieve history of finished tasks."""

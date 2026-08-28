@@ -44,19 +44,34 @@ class PPOPolicyScheduler(BaseScheduler):
             hidden_dim=hidden_dim,
         ).to(self.device)
 
-        if os.path.exists(checkpoint_path):
+        # Resolve checkpoint path across potential relative directories
+        candidate_paths = [
+            checkpoint_path,
+            os.path.join(os.path.dirname(__file__), "..", checkpoint_path),
+            os.path.join(os.getcwd(), checkpoint_path),
+            os.path.join(os.getcwd(), "..", checkpoint_path),
+            os.path.join(os.path.dirname(__file__), "..", "checkpoints", "ppo_best.pt"),
+            os.path.join(os.path.dirname(__file__), "..", "checkpoints", "ppo_final.pt"),
+        ]
+        resolved_path = None
+        for p in candidate_paths:
+            if p and os.path.exists(p) and os.path.isfile(p):
+                resolved_path = os.path.abspath(p)
+                break
+
+        if resolved_path:
             try:
-                checkpoint = torch.load(checkpoint_path, map_location=self.device)
+                checkpoint = torch.load(resolved_path, map_location=self.device)
                 hidden_dim = checkpoint.get("config", {}).get("hidden_dim", 256)
                 self.actor_critic.load_state_dict(checkpoint["model_state_dict"])
                 self.actor_critic.eval()
-                print(f"Loaded PPO policy checkpoint from '{checkpoint_path}' on [{self.device.type.upper()}]")
+                print(f"Loaded PPO policy checkpoint from '{resolved_path}' on [{self.device.type.upper()}]")
             except Exception as e:
-                print(f"Notice: Checkpoint '{checkpoint_path}' has legacy architecture shape ({e}). Initializing fresh Cross-Attention weights.")
+                print(f"Notice: Checkpoint '{resolved_path}' error ({e}). Initializing fresh Cross-Attention weights.")
                 self.actor_critic.eval()
         else:
             self.actor_critic.eval()
-            print(f"Warning: Checkpoint '{checkpoint_path}' not found. Initialized with fresh weights.")
+            print(f"Warning: Checkpoint '{checkpoint_path}' not found in any candidate path. Initialized with fresh weights.")
 
     @property
     def name(self) -> str:

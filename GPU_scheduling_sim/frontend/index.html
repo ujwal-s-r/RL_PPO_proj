@@ -976,6 +976,7 @@
             <div class="sim-controls-group">
                 <button class="btn-white" id="btn-sim-step">Step (Space)</button>
                 <button class="btn-outline-white" id="btn-sim-auto">Auto-Play ▶</button>
+                <button class="btn-outline-white" id="btn-sim-fast" style="border-color: #38bdf8; color: #38bdf8;">Fast Complete ⚡</button>
                 <button class="btn-outline-white" id="btn-view-metrics">Final Comparison 📊</button>
             </div>
         </div>
@@ -1187,6 +1188,7 @@
 
         const btnSimStep = document.getElementById("btn-sim-step");
         const btnSimAuto = document.getElementById("btn-sim-auto");
+        const btnSimFast = document.getElementById("btn-sim-fast");
         const btnViewMetrics = document.getElementById("btn-view-metrics");
         const metricsModal = document.getElementById("metrics-modal");
         const btnCloseModal = document.getElementById("btn-close-modal");
@@ -1608,7 +1610,42 @@
             if (!isAutoPlaying) return;
             await stepSimulation();
             if (isAutoPlaying && remainingJobsCount > 0) {
-                autoPlayTimer = setTimeout(runAutoPlayLoop, 400);
+                autoPlayTimer = setTimeout(runAutoPlayLoop, 30);
+            }
+        }
+
+        async function fastForwardSimulation() {
+            if (isSteppingInProgress) return;
+            isSteppingInProgress = true;
+            btnSimFast.disabled = true;
+            btnSimFast.textContent = "Simulating... ⚡";
+
+            try {
+                const res = await fetch("/api/simulation/fast_forward", { method: "POST" });
+                if (!res.ok) throw new Error("Fast forward failed: " + res.status);
+                const result = await res.json();
+
+                latestBenchmarkSummary = result.benchmark_summary || [];
+                simClockBadge.textContent = `SIM TIME: ${result.sim_time.toFixed(1)}s`;
+
+                totalWorkloadJobs = result.total_scenario_jobs || 60;
+                completedJobsCount = result.completed_jobs_count !== undefined ? result.completed_jobs_count : (result.completed_history ? result.completed_history.length : 0);
+                remainingJobsCount = result.remaining_jobs_count !== undefined ? result.remaining_jobs_count : Math.max(0, totalWorkloadJobs - completedJobsCount);
+
+                const pct = Math.min(100, Math.round((completedJobsCount / totalWorkloadJobs) * 100));
+                workloadProgressLabel.textContent = `Workload: ${completedJobsCount} / ${totalWorkloadJobs} Done (${pct}%)`;
+                workloadProgressFill.style.width = `${pct}%`;
+
+                renderPipelineBuffers(result.cluster_status.queue, result.completed_history || []);
+                renderNodes(result.cluster_status.nodes);
+
+                openMetricsModal();
+            } catch (err) {
+                console.error("Fast forward error:", err);
+            } finally {
+                btnSimFast.disabled = false;
+                btnSimFast.textContent = "Fast Complete ⚡";
+                isSteppingInProgress = false;
             }
         }
 
@@ -1659,6 +1696,7 @@
         // ================= EVENT LISTENERS =================
         btnSimStep.addEventListener("click", stepSimulation);
         btnSimAuto.addEventListener("click", toggleAutoPlay);
+        btnSimFast.addEventListener("click", fastForwardSimulation);
         btnViewMetrics.addEventListener("click", openMetricsModal);
         btnCloseModal.addEventListener("click", closeMetricsModal);
         metricsModal.addEventListener("click", (e) => { if (e.target === metricsModal) closeMetricsModal(); });

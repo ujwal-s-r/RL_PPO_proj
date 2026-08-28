@@ -80,11 +80,11 @@ class RolloutBuffer:
 
         for t in reversed(range(self.rollout_length)):
             if t == self.rollout_length - 1:
-                next_non_terminal = 1.0 - last_done
                 next_values = last_value
             else:
-                next_non_terminal = 1.0 - self.dones[t + 1]
                 next_values = self.values[t + 1]
+
+            next_non_terminal = 1.0 - self.dones[t]
 
             # TD error delta = r_t + gamma * V(s_{t+1}) * (1 - d_t) - V(s_t)
             delta = self.rewards[t] + (gamma * next_values * next_non_terminal) - self.values[t]

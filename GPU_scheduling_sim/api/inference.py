@@ -135,8 +135,17 @@ class ClusterServiceManager:
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=100000.0)
         self.simulator.reset()
 
-        # Load scenario jobs
-        jobs = create_scenario_workload(scenario, seed=seed)
+        # Adapt job requirements to cluster max node capacities so every job is physically schedulable
+        max_cluster_gpus_per_node = max((n.gpu_count for n in self.cluster.nodes), default=8)
+        max_cluster_vram = max((n.vram_per_gpu_gb for n in self.cluster.nodes), default=80.0)
+
+        raw_jobs = create_scenario_workload(scenario, seed=seed)
+        jobs = []
+        for j in raw_jobs:
+            j.gpu_count = max(1, min(j.gpu_count, max_cluster_gpus_per_node))
+            j.vram_per_gpu_gb = min(j.vram_per_gpu_gb, max_cluster_vram)
+            jobs.append(j)
+
         self.total_scenario_jobs = len(jobs)
         self.simulator.load_workload(jobs)
 
@@ -149,7 +158,19 @@ class ClusterServiceManager:
             b_cluster = Cluster.from_yaml(self.cluster_config)
             b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=100000.0)
             b_sim.reset()
-            b_jobs = create_scenario_workload(scenario, seed=seed)
+            b_jobs = [
+                Job(
+                    job_id=j.job_id,
+                    workload_type=j.workload_type,
+                    gpu_count=j.gpu_count,
+                    vram_per_gpu_gb=j.vram_per_gpu_gb,
+                    actual_runtime=j.actual_runtime,
+                    estimated_runtime=j.estimated_runtime,
+                    priority=j.priority,
+                    arrival_time=j.arrival_time,
+                    deadline=j.deadline,
+                ) for j in jobs
+            ]
             b_sim.load_workload(b_jobs)
             b_sim.step_to_next_decision()
             self.baseline_sims[b_name] = b_sim

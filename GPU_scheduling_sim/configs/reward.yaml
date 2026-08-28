@@ -1,9 +1,9 @@
 # Decima-Style Multi-Objective GPU Cluster Scheduling Reward:
-utilization_weight: 1.50          # Continuous +1.5 * (active_gpus / total_gpus) per step
-completion_weight: 1.00           # Base completion reward
-turnaround_efficiency_weight: 1.25 # Priority-weighted JCT speedup (runtime / turnaround)
-slowdown_penalty_weight: 0.08     # Normalized bounded slowdown penalty for queue backlog
-deadline_miss_weight: 10.00       # Severe penalty for missing critical model SLAs
+utilization_weight: 2.00          # Continuous +2.0 * (active_gpus / total_gpus) per step
+completion_weight: 1.50           # Base completion reward
+turnaround_efficiency_weight: 1.50 # Priority-weighted JCT speedup (runtime / turnaround)
+slowdown_penalty_weight: 0.10     # Normalized bounded slowdown penalty for queue backlog
+deadline_miss_weight: 4.00        # Balanced SLA protection penalty
 invalid_action_penalty: 2.00      # Rejection penalty for invalid action attempts
-step_penalty: 0.001               # Small step penalty to encourage rapid draining
+step_penalty: 0.005               # Step penalty to encourage rapid draining
 fragmentation_bonus_weight: 0.50  # Bonus for perfectly filling stranded node GPUs
