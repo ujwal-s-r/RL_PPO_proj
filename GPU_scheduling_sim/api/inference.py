@@ -13,6 +13,7 @@ from baselines.fifo import FIFOScheduler
 from baselines.sjf import SJFScheduler
 from baselines.priority import PriorityScheduler
 from baselines.best_fit import BestFitScheduler
+from baselines.sjf_backfill import SJFBackfillScheduler
 from evaluation.ppo_policy import PPOPolicyScheduler
 from workloads.scenarios import create_scenario_workload, list_scenarios
 from api.schemas import (
@@ -42,10 +43,11 @@ class ClusterServiceManager:
         self.cluster = Cluster.from_yaml(self.cluster_config)
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
 
-        # Initialize all 5 policies
+        # Initialize all 6 policies
         self.policies = {
             "FIFO": FIFOScheduler(),
             "SJF": SJFScheduler(),
+            "SJF_Backfill": SJFBackfillScheduler(),
             "Priority": PriorityScheduler(),
             "BestFit": BestFitScheduler(),
             "PPO": PPOPolicyScheduler(
@@ -101,7 +103,7 @@ class ClusterServiceManager:
 
         # Also initialize simultaneous baseline simulators on identical workload clone
         self.baseline_sims: Dict[str, Simulator] = {}
-        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "BestFit"]:
             b_cluster = Cluster.create_dynamic(node_specs)
             b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=None)
             b_sim.reset()
@@ -154,7 +156,7 @@ class ClusterServiceManager:
 
         # Initialize simultaneous baseline simulators
         self.baseline_sims = {}
-        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "BestFit"]:
             b_cluster = Cluster.from_yaml(self.cluster_config)
             b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=100000.0)
             b_sim.reset()
@@ -393,7 +395,7 @@ class ClusterServiceManager:
         })
 
         # 2. Baseline Metrics
-        for b_name in ["FIFO", "SJF", "Priority", "BestFit"]:
+        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "BestFit"]:
             if b_name in self.baseline_sims:
                 b_m = self._extract_sim_metrics(self.baseline_sims[b_name])
                 all_metrics.append({
