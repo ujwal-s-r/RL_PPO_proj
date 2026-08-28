@@ -142,46 +142,77 @@ class Simulator:
         self.cluster.validate_invariants()
         return True
 
+    def _process_event(self, event: Event, step_completed_jobs: List[Job]) -> bool:
+        """Process a single event. Returns True if HORIZON_REACHED."""
+        if event.event_type == EventType.HORIZON_REACHED:
+            return True
+        elif event.event_type == EventType.JOB_COMPLETION:
+            if event.job is not None and event.node_id is not None:
+                node = self.cluster.get_node(event.node_id)
+                if node is not None:
+                    completed = node.complete(event.job.job_id, self.current_time)
+                    if completed is not None:
+                        self.completed_jobs.append(completed)
+                        step_completed_jobs.append(completed)
+        elif event.event_type == EventType.JOB_ARRIVAL:
+            if event.job is not None:
+                self.queue.push(event.job)
+        return False
+
     def step_to_next_decision(self) -> Tuple[bool, List[Job]]:
         """
-        Process non-decision events (completions, arrivals, horizon) until:
-        1. A valid scheduling action becomes possible, OR
-        2. Episode terminates (horizon reached or all jobs completed).
+        Process non-decision events until:
+        1. An actionable scheduling state exists at current_time (allowing multi-placement at same t), OR
+        2. Time advances to the next timestamp where an actionable scheduling state exists, OR
+        3. Episode terminates (horizon reached or all jobs completed).
         
         Returns:
             (is_done, list_of_jobs_completed_in_this_step)
         """
         step_completed_jobs: List[Job] = []
 
-        while not self.event_queue.is_empty:
+        # 1. Process all pending events at current_time (arrivals / completions right now)
+        while not self.event_queue.is_empty and self.event_queue.peek().timestamp <= self.current_time + 1e-9:
             event = self.event_queue.pop()
-            self._update_integrals(event.timestamp)
-
-            if event.event_type == EventType.HORIZON_REACHED:
+            is_horizon = self._process_event(event, step_completed_jobs)
+            if is_horizon:
                 return True, step_completed_jobs
 
-            elif event.event_type == EventType.JOB_COMPLETION:
-                if event.job is not None and event.node_id is not None:
-                    node = self.cluster.get_node(event.node_id)
-                    if node is not None:
-                        completed = node.complete(event.job.job_id, self.current_time)
-                        if completed is not None:
-                            self.completed_jobs.append(completed)
-                            step_completed_jobs.append(completed)
+        self.cluster.validate_invariants()
 
-            elif event.event_type == EventType.JOB_ARRIVAL:
-                if event.job is not None:
-                    # Queue is unlimited so push always succeeds — zero drops
-                    self.queue.push(event.job)
+        # 2. If valid placements exist RIGHT NOW at current_time, return immediately so policy can place next job at same t!
+        if self.get_state().has_any_valid_action():
+            return False, step_completed_jobs
 
-            # Recheck invariants after every event processing
+        # 3. Only when NO valid action exists at current_time, advance time to future events
+        while not self.event_queue.is_empty:
+            next_event = self.event_queue.peek()
+            next_time = next_event.timestamp
+            self._update_integrals(next_time)
+
+            # Process all events occurring at this new timestamp
+            while not self.event_queue.is_empty and self.event_queue.peek().timestamp <= self.current_time + 1e-9:
+                event = self.event_queue.pop()
+                is_horizon = self._process_event(event, step_completed_jobs)
+                if is_horizon:
+                    return True, step_completed_jobs
+
             self.cluster.validate_invariants()
 
-            # If we now have an actionable state, stop and present to scheduler
+            # Check if all submitted jobs are now completed (done immediately without jumping to horizon)
+            running_count = sum(len(n.running_jobs) for n in self.cluster.nodes)
+            if (
+                len(self.completed_jobs) >= len(self.submitted_jobs)
+                and len(self.queue) == 0
+                and running_count == 0
+            ):
+                return True, step_completed_jobs
+
+            # If an actionable state now exists at this new timestamp, pause and let policy decide
             if self.get_state().has_any_valid_action():
                 return False, step_completed_jobs
 
-        # No more events remaining: done only if ALL submitted jobs completed and nothing running
+        # No more events remaining: check if simulation is fully complete
         running_count = sum(len(n.running_jobs) for n in self.cluster.nodes)
         is_done = (
             len(self.completed_jobs) >= len(self.submitted_jobs)
@@ -218,13 +249,25 @@ class Simulator:
         )
 
     def get_metrics(self) -> Dict[str, Any]:
-        """Compute end-of-episode or checkpoint evaluation metrics."""
+        """Compute end-of-episode or checkpoint evaluation metrics (uncensored)."""
         duration = max(1.0, self.current_time)
         completed = self.completed_jobs
+        total_submitted = max(1, len(self.submitted_jobs))
         
         jcts = [j.turnaround_time for j in completed if j.turnaround_time is not None]
         waits = [j.waiting_time for j in completed]
-        deadline_misses = [j for j in completed if j.is_deadline_missed()]
+
+        # Calculate deadline violations across ALL submitted jobs (uncensored)
+        # 1. Completed jobs that finished after deadline
+        completed_misses = [j for j in completed if j.is_deadline_missed()]
+        # 2. Unfinished jobs (in queue or still running) whose deadline has already elapsed
+        running_jobs = [job for node in self.cluster.nodes for job in node.running_jobs.values()]
+        queued_jobs = list(self.queue.jobs)
+        unfinished_misses = [j for j in (running_jobs + queued_jobs) if self.current_time > j.deadline]
+        
+        total_misses_count = len(completed_misses) + len(unfinished_misses)
+        deadline_violation_rate = total_misses_count / total_submitted
+        sla_compliance_rate = max(0.0, 1.0 - deadline_violation_rate)
 
         mean_jct = float(np.mean(jcts)) if jcts else 0.0
         p95_jct = float(np.percentile(jcts, 95)) if jcts else 0.0
@@ -239,12 +282,18 @@ class Simulator:
         return {
             "completed_jobs": len(completed),
             "submitted_jobs": len(self.submitted_jobs),
+            "completion_rate": len(completed) / total_submitted,
             "mean_jct": mean_jct,
             "p95_jct": p95_jct,
             "mean_wait_time": mean_wait,
             "gpu_utilization": avg_gpu_utilization,
             "throughput_jobs_per_hour": (len(completed) / duration) * 3600.0,
-            "deadline_violation_rate": (len(deadline_misses) / len(completed)) if completed else 0.0,
+            "deadline_violation_rate": deadline_violation_rate,
+            "sla_compliance_rate": sla_compliance_rate,
+            "sla_compliance_pct": sla_compliance_rate * 100.0,
             "invalid_action_count": self.invalid_action_count,
             "simulation_duration": duration,
+            "integrated_busy_gpu_seconds": self.integrated_busy_gpu_seconds,
+            "integrated_idle_gpu_seconds": self.integrated_idle_gpu_seconds,
+            "integrated_queue_wait_seconds": self.integrated_queue_wait_seconds,
         }

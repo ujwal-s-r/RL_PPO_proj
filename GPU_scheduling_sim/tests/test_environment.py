@@ -52,6 +52,49 @@ def test_env_seed_determinism():
     np.testing.assert_allclose(info1["action_mask"], info2["action_mask"], atol=1e-5)
 
 
+def test_simulator_same_timestamp_decision_epochs():
+    """Verify that multiple jobs can be placed at timestamp t=0 without advancing time."""
+    from simulator.cluster import Cluster
+    from simulator.simulator import Simulator
+    from simulator.job import Job, WorkloadType
+
+    cluster = Cluster.from_yaml("configs/cluster_small.yaml")
+    sim = Simulator(cluster=cluster, max_queue_size=16)
+    sim.reset()
+
+    # 4 jobs of 1 GPU each arriving at t=0
+    jobs = [
+        Job(job_id=i, arrival_time=0.0, gpu_count=1, vram_per_gpu_gb=16.0, estimated_runtime=100.0, actual_runtime=100.0, priority=5, workload_type=WorkloadType.INFERENCE)
+        for i in range(1, 5)
+    ]
+    sim.load_workload(jobs)
+    done, completed = sim.step_to_next_decision()
+    assert sim.current_time == 0.0
+    assert len(sim.queue) == 4
+
+    # Schedule Job 1 on Node 0 at t=0
+    success = sim.apply_action(job_index=0, node_index=0)
+    assert success is True
+    assert sim.current_time == 0.0
+
+    # Call step_to_next_decision() -> MUST REMAIN AT t=0 because Jobs 2, 3, 4 can still be placed!
+    done, completed = sim.step_to_next_decision()
+    assert sim.current_time == 0.0, f"Time jumped prematurely! Got t={sim.current_time}, expected 0.0"
+    assert sim.get_state().has_any_valid_action() is True
+
+    # Place remaining 3 jobs at t=0
+    sim.apply_action(job_index=0, node_index=0)
+    sim.apply_action(job_index=0, node_index=1)
+    sim.apply_action(job_index=0, node_index=1)
+    assert len(sim.queue) == 0
+
+    # Now that queue is empty at t=0, step_to_next_decision() should advance time to first completion at t=100
+    done, completed = sim.step_to_next_decision()
+    assert sim.current_time == 100.0
+    assert len(completed) == 4
+    assert done is True
+
+
 def test_openenv_client_flow():
     client = OpenEnvClient(cluster_config_path="configs/cluster_small.yaml")
     obs, info = client.reset(seed=42)
