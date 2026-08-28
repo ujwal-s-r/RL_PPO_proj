@@ -44,6 +44,8 @@ class Simulator:
         self.integrated_queue_wait_seconds: float = 0.0
         self.integrated_idle_gpu_seconds: float = 0.0
         self.integrated_busy_gpu_seconds: float = 0.0
+        self.integrated_weighted_queue_seconds: float = 0.0
+        self.integrated_weighted_running_seconds: float = 0.0
 
     def reset(self) -> SchedulerState:
         """Reset the simulator to initial empty cluster state at t=0."""
@@ -60,6 +62,8 @@ class Simulator:
         self.integrated_queue_wait_seconds = 0.0
         self.integrated_idle_gpu_seconds = 0.0
         self.integrated_busy_gpu_seconds = 0.0
+        self.integrated_weighted_queue_seconds = 0.0
+        self.integrated_weighted_running_seconds = 0.0
 
         # Schedule end of horizon event only if explicitly configured
         if self.horizon_seconds is not None and self.horizon_seconds > 0:
@@ -90,7 +94,7 @@ class Simulator:
             self.submit_job(job)
 
     def _update_integrals(self, new_time: float) -> None:
-        """Accumulate area under curve for queue length and GPU idle/busy states."""
+        """Accumulate area under curve for queue length, GPU idle/busy states, and priority flow-time."""
         dt = max(0.0, new_time - self.current_time)
         if dt > 0:
             self.integrated_queue_wait_seconds += len(self.queue) * dt
@@ -98,6 +102,13 @@ class Simulator:
             busy_gpus = self.cluster.total_gpus - idle_gpus
             self.integrated_idle_gpu_seconds += idle_gpus * dt
             self.integrated_busy_gpu_seconds += busy_gpus * dt
+
+            # Priority-weighted flow-time: sum(priority / 5.0 * dt) across queue and running jobs
+            q_weight = sum(j.priority / 5.0 for j in self.queue)
+            r_weight = sum(j.priority / 5.0 for n in self.cluster.nodes for j in n.running_jobs.values())
+            self.integrated_weighted_queue_seconds += q_weight * dt
+            self.integrated_weighted_running_seconds += r_weight * dt
+
             self.current_time = new_time
 
     def apply_action(self, job_index: int, node_index: int) -> bool:

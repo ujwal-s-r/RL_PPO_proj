@@ -95,9 +95,12 @@ if __name__ == "__main__":
     test_best_fit_logic()
     print("[PASS] test_best_fit_logic")
 
-    from tests.test_baselines import test_sjf_backfill_logic
+    from tests.test_baselines import test_sjf_backfill_logic, test_priority_best_fit_logic
     test_sjf_backfill_logic()
     print("[PASS] test_sjf_backfill_logic")
+
+    test_priority_best_fit_logic()
+    print("[PASS] test_priority_best_fit_logic")
 
     test_baseline_runner_episode()
     print("[PASS] test_baseline_runner_episode")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 import os
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -112,16 +113,17 @@ class PPO:
 
                 # Diagnostic: calculate pre-clip gradient norms
                 with torch.no_grad():
-                    a_grads = [p.grad.detach() for p in self.actor_critic.pair_scorer.parameters() if p.grad is not None]
+                    a_grads = [p.grad.detach() for p in list(self.actor_critic.job_scorer.parameters()) + list(self.actor_critic.placement_scorer.parameters()) if p.grad is not None]
                     c_grads = [p.grad.detach() for p in self.actor_critic.critic_head.parameters() if p.grad is not None]
                     a_norm = torch.norm(torch.stack([torch.norm(g, 2) for g in a_grads]), 2).item() if a_grads else 0.0
                     c_norm = torch.norm(torch.stack([torch.norm(g, 2) for g in c_grads]), 2).item() if c_grads else 0.0
                     actor_grad_norms.append(a_norm)
                     critic_grad_norms.append(c_norm)
 
-                # Separate Gradient Clipping for Actor and Critic to prevent Critic from starving Actor
+                # Separate Gradient Clipping for Actor Heads and Critic Head
                 max_norm = self.config.max_grad_norm
-                nn.utils.clip_grad_norm_(self.actor_critic.pair_scorer.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.job_scorer.parameters(), max_norm)
+                nn.utils.clip_grad_norm_(self.actor_critic.placement_scorer.parameters(), max_norm)
                 nn.utils.clip_grad_norm_(self.actor_critic.critic_head.parameters(), max_norm)
                 nn.utils.clip_grad_norm_(self.actor_critic.node_proj.parameters(), max_norm)
                 nn.utils.clip_grad_norm_(self.actor_critic.queue_proj.parameters(), max_norm)
@@ -134,14 +136,18 @@ class PPO:
                 v_losses.append(value_loss.item())
                 entropy_losses.append(entropy_loss.item())
 
+                # KL Early Stopping: break after current batch if KL threshold exceeded
+                if self.config.target_kl is not None and approx_kl.item() > (1.5 * self.config.target_kl):
+                    break
+
         return {
-            "policy_loss": float(np.mean(pg_losses)) if "np" in globals() else float(sum(pg_losses)/len(pg_losses)),
-            "value_loss": float(sum(v_losses) / len(v_losses)),
-            "entropy": float(sum(entropy_losses) / len(entropy_losses)),
-            "approx_kl": float(sum(approx_kls) / len(approx_kls)),
-            "clip_fraction": float(sum(clip_fractions) / len(clip_fractions)),
-            "actor_grad_norm": float(sum(actor_grad_norms) / len(actor_grad_norms)) if actor_grad_norms else 0.0,
-            "critic_grad_norm": float(sum(critic_grad_norms) / len(critic_grad_norms)) if critic_grad_norms else 0.0,
+            "policy_loss": float(np.mean(pg_losses)) if len(pg_losses) > 0 else 0.0,
+            "value_loss": float(np.mean(v_losses)) if len(v_losses) > 0 else 0.0,
+            "entropy": float(np.mean(entropy_losses)) if len(entropy_losses) > 0 else 0.0,
+            "approx_kl": float(np.mean(approx_kls)) if len(approx_kls) > 0 else 0.0,
+            "clip_fraction": float(np.mean(clip_fractions)) if len(clip_fractions) > 0 else 0.0,
+            "actor_grad_norm": float(np.mean(actor_grad_norms)) if len(actor_grad_norms) > 0 else 0.0,
+            "critic_grad_norm": float(np.mean(critic_grad_norms)) if len(critic_grad_norms) > 0 else 0.0,
         }
 
     def save_checkpoint(self, path: str, extra_metadata: Optional[Dict[str, Any]] = None) -> None:

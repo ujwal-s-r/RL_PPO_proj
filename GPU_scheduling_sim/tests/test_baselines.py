@@ -110,3 +110,23 @@ def test_sjf_backfill_logic():
     # Head job j2 cannot fit on Node 1, so backfill selects j3 (index 1) on Node 1 (index 1)
     assert act[0] == 1
     assert act[1] == 1
+
+
+def test_priority_best_fit_logic():
+    from baselines.priority_best_fit import PriorityBestFitScheduler
+    cluster = Cluster.from_yaml("configs/cluster_small.yaml")
+    sim = Simulator(cluster=cluster, max_queue_size=8)
+    sim.reset()
+
+    # j1: priority 9, 2 GPUs @ 20GB
+    # j2: priority 3, 2 GPUs @ 20GB
+    j1 = Job(1, arrival_time=0.0, gpu_count=2, vram_per_gpu_gb=20.0, estimated_runtime=50.0, actual_runtime=50.0, priority=9)
+    j2 = Job(2, arrival_time=0.0, gpu_count=2, vram_per_gpu_gb=20.0, estimated_runtime=50.0, actual_runtime=50.0, priority=3)
+    sim.queue.push(j2)
+    sim.queue.push(j1)
+
+    pbf = PriorityBestFitScheduler()
+    act = pbf.select_action(sim.get_state())
+    assert act is not None
+    assert act[0] == 1  # Pick j1 (index 1, priority 9)
+    assert act[1] in [0, 1]  # Pick best-fit node

@@ -22,6 +22,7 @@ nb["cells"][1]["source"] = [
     "from baselines.sjf import SJFScheduler\n",
     "from baselines.sjf_backfill import SJFBackfillScheduler\n",
     "from baselines.priority import PriorityScheduler\n",
+    "from baselines.priority_best_fit import PriorityBestFitScheduler\n",
     "from baselines.best_fit import BestFitScheduler\n",
     "from evaluation.ppo_policy import PPOPolicyScheduler\n",
     "from evaluation.evaluator import Evaluator\n",
@@ -40,6 +41,7 @@ nb["cells"][3]["source"] = [
     "    SJFScheduler(),\n",
     "    SJFBackfillScheduler(),\n",
     "    PriorityScheduler(),\n",
+    "    PriorityBestFitScheduler(),\n",
     "    BestFitScheduler(),\n",
     "    PPOPolicyScheduler(checkpoint_path=\"../checkpoints/ppo_final.pt\", cluster_config_path=\"../configs/cluster_small.yaml\"),\n",
     "]\n",
@@ -57,4 +59,4 @@ nb["cells"][3]["source"] = [
 with open(nb_path, "w", encoding="utf-8") as f:
     json.dump(nb, f, indent=1)
 
-print("Updated 06_final_evaluation.ipynb successfully!")
+print("Updated 06_final_evaluation.ipynb with PriorityBestFitScheduler successfully!")

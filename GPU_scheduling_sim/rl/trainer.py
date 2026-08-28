@@ -163,7 +163,8 @@ class PPOTrainer:
                     f"Loss(V): {loss_dict['value_loss']:.4f} | "
                     f"Entropy: {loss_dict['entropy']:.3f} | "
                     f"KL: {loss_dict['approx_kl']:.4f} | "
-                    f"Grad(A/C): {a_gn:.3f}/{c_gn:.3f}"
+                    f"Grad(A/C): {a_gn:.3f}/{c_gn:.3f}",
+                    flush=True,
                 )
 
             # 4. Periodic Best & Stepped Checkpoint Saving
