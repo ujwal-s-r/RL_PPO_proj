@@ -50,3 +50,33 @@ def test_simulator_basic_flow():
     assert metrics["completed_jobs"] == 3
     assert metrics["invalid_action_count"] == 0
     assert metrics["mean_jct"] > 0
+
+
+def test_full_visible_queue_preserves_arrivals():
+    """Arrivals beyond the policy-visible queue must still complete."""
+    cluster = Cluster.from_yaml("configs/cluster_small.yaml")
+    sim = Simulator(cluster=cluster, max_queue_size=1, horizon_seconds=None)
+    sim.reset()
+
+    jobs = [
+        Job(job_id=i, arrival_time=0.0, gpu_count=1, vram_per_gpu_gb=20.0,
+            estimated_runtime=1.0, actual_runtime=1.0)
+        for i in range(1, 4)
+    ]
+    sim.load_workload(jobs)
+
+    done, _ = sim.step_to_next_decision()
+    while not done:
+        state = sim.get_state()
+        for job_idx in range(len(state.queue)):
+            for node_idx in range(state.num_nodes):
+                if state.is_action_valid(job_idx, node_idx):
+                    assert sim.apply_action(job_idx, node_idx)
+                    break
+            else:
+                continue
+            break
+        done, _ = sim.step_to_next_decision()
+
+    assert len(sim.completed_jobs) == len(jobs)
+    assert sim.overflow_jobs == []

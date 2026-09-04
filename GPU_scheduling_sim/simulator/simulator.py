@@ -31,6 +31,9 @@ class Simulator:
         self.horizon_seconds = horizon_seconds
 
         self.queue = JobQueue(max_size=max_queue_size)
+        # Keep arrivals beyond the policy-visible queue instead of dropping them.
+        # The observation/action space stays bounded; this backlog preserves workload correctness.
+        self.overflow_jobs: List[Job] = []
         self.event_queue = EventQueue()
         self.current_time: float = 0.0
         self.last_time: float = 0.0
@@ -51,6 +54,7 @@ class Simulator:
         """Reset the simulator to initial empty cluster state at t=0."""
         self.cluster.reset()
         self.queue.clear()
+        self.overflow_jobs.clear()
         self.event_queue.clear()
         self.current_time = 0.0
         self.last_time = 0.0
@@ -93,6 +97,16 @@ class Simulator:
         for job in jobs:
             self.submit_job(job)
 
+    def _promote_overflow_jobs(self) -> None:
+        """Move arrived jobs into the visible queue whenever capacity is available."""
+        while self.overflow_jobs and not self.queue.is_full:
+            self.queue.push(self.overflow_jobs.pop(0))
+
+    def _enqueue_arrival(self, job: Job) -> None:
+        """Enqueue an arrival without losing it when the visible queue is full."""
+        if not self.queue.push(job):
+            self.overflow_jobs.append(job)
+
     def _update_integrals(self, new_time: float) -> None:
         """Accumulate area under curve for queue length, GPU idle/busy states, and priority flow-time."""
         dt = max(0.0, new_time - self.current_time)
@@ -104,7 +118,9 @@ class Simulator:
             self.integrated_busy_gpu_seconds += busy_gpus * dt
 
             # Priority-weighted flow-time: sum(priority / 5.0 * dt) across queue and running jobs
-            q_weight = sum(j.priority / 5.0 for j in self.queue)
+            pending_jobs = list(self.queue.jobs) + list(self.overflow_jobs)
+            self.integrated_queue_wait_seconds += len(self.overflow_jobs) * dt
+            q_weight = sum(j.priority / 5.0 for j in pending_jobs)
             r_weight = sum(j.priority / 5.0 for n in self.cluster.nodes for j in n.running_jobs.values())
             self.integrated_weighted_queue_seconds += q_weight * dt
             self.integrated_weighted_running_seconds += r_weight * dt
@@ -149,6 +165,8 @@ class Simulator:
             )
         )
 
+        self._promote_overflow_jobs()
+
         # Invariant check
         self.cluster.validate_invariants()
         return True
@@ -167,7 +185,7 @@ class Simulator:
                         step_completed_jobs.append(completed)
         elif event.event_type == EventType.JOB_ARRIVAL:
             if event.job is not None:
-                self.queue.push(event.job)
+                self._enqueue_arrival(event.job)
         return False
 
     def step_to_next_decision(self) -> Tuple[bool, List[Job]]:
@@ -181,6 +199,8 @@ class Simulator:
             (is_done, list_of_jobs_completed_in_this_step)
         """
         step_completed_jobs: List[Job] = []
+
+        self._promote_overflow_jobs()
 
         # 1. Process all pending events at current_time (arrivals / completions right now)
         while not self.event_queue.is_empty and self.event_queue.peek().timestamp <= self.current_time + 1e-9:
@@ -215,6 +235,7 @@ class Simulator:
             if (
                 len(self.completed_jobs) >= len(self.submitted_jobs)
                 and len(self.queue) == 0
+                and len(self.overflow_jobs) == 0
                 and running_count == 0
             ):
                 return True, step_completed_jobs
@@ -228,6 +249,7 @@ class Simulator:
         is_done = (
             len(self.completed_jobs) >= len(self.submitted_jobs)
             and len(self.queue) == 0
+            and len(self.overflow_jobs) == 0
             and running_count == 0
         )
         return is_done, step_completed_jobs
@@ -273,7 +295,7 @@ class Simulator:
         completed_misses = [j for j in completed if j.is_deadline_missed()]
         # 2. Unfinished jobs (in queue or still running) whose deadline has already elapsed
         running_jobs = [job for node in self.cluster.nodes for job in node.running_jobs.values()]
-        queued_jobs = list(self.queue.jobs)
+        queued_jobs = list(self.queue.jobs) + list(self.overflow_jobs)
         unfinished_misses = [j for j in (running_jobs + queued_jobs) if self.current_time > j.deadline]
         
         total_misses_count = len(completed_misses) + len(unfinished_misses)
