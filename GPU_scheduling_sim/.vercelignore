@@ -10,4 +10,4 @@ tests/
 logs/
 data/
 checkpoints/*
-!checkpoints/ppo_final.pt
+!checkpoints/ppo_final.onnx

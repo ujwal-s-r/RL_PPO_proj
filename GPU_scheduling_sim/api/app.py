@@ -53,7 +53,7 @@ def get_service() -> "ClusterServiceManager":
 
     return ClusterServiceManager(
         cluster_config="configs/cluster_small.yaml",
-        checkpoint_path="checkpoints/ppo_final.pt",
+        checkpoint_path="checkpoints/ppo_final.onnx",
         default_scenario="balanced",
     )
 
