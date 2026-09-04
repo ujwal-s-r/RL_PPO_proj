@@ -1,0 +1,13 @@
+# Files not needed by the hosted FastAPI inference application.
+.git/
+.venv/
+.vercel/
+.pytest_cache/
+__pycache__/
+notebooks/
+scratch/
+tests/
+logs/
+data/
+checkpoints/*
+!checkpoints/ppo_final.onnx

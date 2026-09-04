@@ -9,25 +9,34 @@ description = "PPO-based GPU Cluster Resource Scheduler with Discrete-Event Simu
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.0.0",
     "numpy>=1.24.0",
     "gymnasium>=0.29.0",
+    "onnxruntime>=1.18.0",
     "pydantic>=2.0.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.22.0",
     "pyyaml>=6.0",
-    "matplotlib>=3.7.0",
-    "pandas>=2.0.0",
-    "tqdm>=4.65.0",
-    "pytest>=7.3.0",
 ]
 
 [project.optional-dependencies]
+analysis = [
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.65.0",
+]
 dev = [
     "pytest>=7.3.0",
     "black>=23.0.0",
     "ruff>=0.0.280",
     "ipykernel>=6.25.0",
+]
+training = [
+    "torch>=2.0.0",
+]
+export = [
+    "torch>=2.0.0",
+    "onnx>=1.16.0",
+    "onnxruntime>=1.18.0",
 ]
 
 [tool.setuptools.packages.find]

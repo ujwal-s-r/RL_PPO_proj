@@ -66,9 +66,9 @@ Or open [`notebooks/06_final_evaluation.ipynb`](notebooks/06_final_evaluation.ip
 
 ### Deploy To Vercel
 
-The repository includes a Vercel ASGI entry point at `api/index.py` and a `vercel.json` rewrite so FastAPI serves both the dashboard and API routes. Install the runtime locally with `pip install -r requirements.txt`, then run the dashboard with `uvicorn api.app:app --host 0.0.0.0 --port 8000`.
+The repository includes a Vercel ASGI entry point at `api/index.py`. The hosted API uses ONNX Runtime, not PyTorch, so the function stays below Vercel Hobby's 500 MB bundle limit. Install the runtime locally with `pip install -r requirements.txt`, then run the dashboard with `uvicorn api.app:app --host 0.0.0.0 --port 8000`.
 
-Before a Git-based Vercel deployment, add the trained model artifact with `git add checkpoints/ppo_final.pt`; the `.gitignore` intentionally includes this final checkpoint while excluding intermediate training checkpoints.
+Before a Git-based Vercel deployment, export the already-trained model once with `pip install -e .[export]` followed by `python scripts/export_onnx.py`. Then add `checkpoints/ppo_final.onnx` to Git. The source `.pt` remains local for training; only the compact ONNX model is deployed.
 
 The live simulator keeps mutable state in memory. That is reliable under local Uvicorn, but Vercel functions may run on different instances between requests. For a multi-user production deployment, persist the simulator/session state in an external store before relying on live run continuity.
 
@@ -90,7 +90,8 @@ GPU_scheduling_sim/
 │   ├── runner.py                  # Single-episode baseline runner
 │   └── sjf.py                     # Shortest Job First baseline
 ├── checkpoints/
-│   └── ppo_final.pt               # Trained PyTorch ActorCritic weights
+│   ├── ppo_final.pt               # Local PyTorch training checkpoint
+│   └── ppo_final.onnx             # Lightweight hosted inference model
 ├── configs/
 │   ├── cluster_medium.yaml        # 4-node 16-GPU cluster definition
 │   ├── cluster_small.yaml         # 2-node 8-GPU cluster definition
