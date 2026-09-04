@@ -4,17 +4,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import os
 import torch
-import numpy as np
 
 from simulator.cluster import Cluster
 from simulator.simulator import Simulator
 from simulator.job import Job, WorkloadType
-from baselines.fifo import FIFOScheduler
-from baselines.sjf import SJFScheduler
-from baselines.priority import PriorityScheduler
-from baselines.best_fit import BestFitScheduler
-from baselines.sjf_backfill import SJFBackfillScheduler
-from baselines.priority_best_fit import PriorityBestFitScheduler
 from evaluation.ppo_policy import PPOPolicyScheduler
 from workloads.scenarios import create_scenario_workload, list_scenarios
 from api.schemas import (
@@ -44,14 +37,8 @@ class ClusterServiceManager:
         self.cluster = Cluster.from_yaml(self.cluster_config)
         self.simulator = Simulator(cluster=self.cluster, max_queue_size=16, horizon_seconds=3600.0)
 
-        # Initialize all 6 policies
+        # Live simulation is PPO-only. Baselines remain available in offline evaluation.
         self.policies = {
-            "FIFO": FIFOScheduler(),
-            "SJF": SJFScheduler(),
-            "SJF_Backfill": SJFBackfillScheduler(),
-            "Priority": PriorityScheduler(),
-            "Priority_BestFit": PriorityBestFitScheduler(),
-            "BestFit": BestFitScheduler(),
             "PPO": PPOPolicyScheduler(
                 checkpoint_path=checkpoint_path,
                 cluster_config_path=cluster_config,
@@ -103,29 +90,6 @@ class ClusterServiceManager:
         # Advance to first scheduling decision point
         done, _ = self.simulator.step_to_next_decision()
 
-        # Also initialize simultaneous baseline simulators on identical workload clone
-        self.baseline_sims: Dict[str, Simulator] = {}
-        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "Priority_BestFit", "BestFit"]:
-            b_cluster = Cluster.create_dynamic(node_specs)
-            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=None)
-            b_sim.reset()
-            b_jobs = [
-                Job(
-                    job_id=j.job_id,
-                    workload_type=j.workload_type,
-                    gpu_count=j.gpu_count,
-                    vram_per_gpu_gb=j.vram_per_gpu_gb,
-                    actual_runtime=j.actual_runtime,
-                    estimated_runtime=j.estimated_runtime,
-                    priority=j.priority,
-                    arrival_time=j.arrival_time,
-                    deadline=j.deadline,
-                ) for j in jobs
-            ]
-            b_sim.load_workload(b_jobs)
-            b_sim.step_to_next_decision()
-            self.baseline_sims[b_name] = b_sim
-
         self.recent_logs.clear()
         self.completed_history: List[Dict[str, Any]] = []
         self.log_event(f"Custom cluster ({len(node_specs)} Nodes) initialized with '{scenario}' scenario ({self.total_scenario_jobs} jobs)", level="system")
@@ -155,29 +119,6 @@ class ClusterServiceManager:
 
         # Advance to first scheduling decision
         done, _ = self.simulator.step_to_next_decision()
-
-        # Initialize simultaneous baseline simulators
-        self.baseline_sims = {}
-        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "Priority_BestFit", "BestFit"]:
-            b_cluster = Cluster.from_yaml(self.cluster_config)
-            b_sim = Simulator(cluster=b_cluster, max_queue_size=16, horizon_seconds=100000.0)
-            b_sim.reset()
-            b_jobs = [
-                Job(
-                    job_id=j.job_id,
-                    workload_type=j.workload_type,
-                    gpu_count=j.gpu_count,
-                    vram_per_gpu_gb=j.vram_per_gpu_gb,
-                    actual_runtime=j.actual_runtime,
-                    estimated_runtime=j.estimated_runtime,
-                    priority=j.priority,
-                    arrival_time=j.arrival_time,
-                    deadline=j.deadline,
-                ) for j in jobs
-            ]
-            b_sim.load_workload(b_jobs)
-            b_sim.step_to_next_decision()
-            self.baseline_sims[b_name] = b_sim
 
         self.recent_logs.clear()
         self.completed_history = []
@@ -218,9 +159,9 @@ class ClusterServiceManager:
             self.log_event(f"Queue full! Could not accept Job #{custom_job.job_id}", level="warning")
             return {"status": "queue_full", "job_id": custom_job.job_id}
 
-    def step_simultaneous(self) -> Dict[str, Any]:
+    def step_ppo(self) -> Dict[str, Any]:
         """
-        Step PPO on the primary interactive simulator and advance all 4 baselines simultaneously.
+        Execute one PPO scheduling decision epoch on the live simulator.
         """
         ppo_policy = self.policies["PPO"]
         
@@ -262,37 +203,6 @@ class ClusterServiceManager:
             if len(self.completed_history) > 50:
                 self.completed_history.pop()
 
-        # Step all 4 baselines simultaneously up to current simulation timestamp
-        current_t = self.simulator.current_time
-        for b_name, b_sim in self.baseline_sims.items():
-            b_policy = self.policies[b_name]
-            for _ in range(25):
-                if b_sim.current_time >= current_t:
-                    break
-                b_state = b_sim.get_state()
-                b_act = b_policy.select_action(b_state)
-                if b_act is not None:
-                    b_sim.apply_action(*b_act)
-                b_done, _ = b_sim.step_to_next_decision()
-                if b_done:
-                    break
-
-        # If PPO simulation finished all jobs, let baselines finish all remaining jobs too
-        if done:
-            for b_name, b_sim in self.baseline_sims.items():
-                b_policy = self.policies[b_name]
-                for _ in range(400):
-                    b_state = b_sim.get_state()
-                    b_act = b_policy.select_action(b_state)
-                    if b_act is not None:
-                        b_sim.apply_action(*b_act)
-                    b_done, _ = b_sim.step_to_next_decision()
-                    if b_done:
-                        break
-
-        # Compute live comparative metrics
-        benchmark_summary = self._compute_benchmark_summary()
-
         total_jobs = getattr(self, "total_scenario_jobs", len(self.simulator.submitted_jobs))
         completed_cnt = len(self.simulator.completed_jobs)
         running_cnt = sum(len(n.running_jobs) for n in self.simulator.cluster.nodes)
@@ -300,12 +210,12 @@ class ClusterServiceManager:
         remaining_cnt = max(0, total_jobs - completed_cnt)
 
         return {
+            "policy": "PPO",
             "action_taken": action_taken,
             "job_id": placed_job_id,
             "node_id": target_node_id,
             "sim_time": self.simulator.current_time,
             "is_done": done,
-            "benchmark_summary": benchmark_summary,
             "completed_history": self.completed_history,
             "total_scenario_jobs": total_jobs,
             "completed_jobs_count": completed_cnt,
@@ -313,112 +223,6 @@ class ClusterServiceManager:
             "queue_jobs_count": queue_cnt,
             "remaining_jobs_count": remaining_cnt,
         }
-
-    def _extract_sim_metrics(self, sim: Simulator) -> Dict[str, Any]:
-        """Extract academic and systems benchmark metrics (JCT, Slowdown, Makespan, Fairness, Util)."""
-        c_jobs = sim.completed_jobs
-        c_count = len(c_jobs)
-        if c_count > 0:
-            turnarounds = [j.turnaround_time for j in c_jobs if j.turnaround_time is not None]
-            mean_jct = float(np.mean(turnarounds)) if turnarounds else 0.0
-            
-            # Bounded Slowdown: JCT / max(Runtime, 10.0s) (Decima / DeepRM standard)
-            slowdowns = [
-                j.turnaround_time / max(10.0, j.actual_runtime)
-                for j in c_jobs if j.turnaround_time is not None
-            ]
-            mean_slowdown = float(np.mean(slowdowns)) if slowdowns else 1.0
-            p95_slowdown = float(np.percentile(slowdowns, 95)) if slowdowns else 1.0
-
-            # Jain's Fairness Index on Inverse Slowdown: (sum x)^2 / (n * sum x^2)
-            inv_slowdowns = [1.0 / s for s in slowdowns if s > 0]
-            if inv_slowdowns:
-                sum_x = sum(inv_slowdowns)
-                sum_sq_x = sum(x * x for x in inv_slowdowns)
-                jains_fairness = float((sum_x * sum_x) / (len(inv_slowdowns) * sum_sq_x)) if sum_sq_x > 0 else 1.0
-            else:
-                jains_fairness = 1.0
-
-            mean_waiting = float(np.mean([j.waiting_time for j in c_jobs]))
-            miss_count = sum(1 for j in c_jobs if j.is_deadline_missed())
-            deadline_miss_pct = (miss_count / c_count) * 100.0
-            last_completion = max([j.completion_time for j in c_jobs if j.completion_time is not None] or [sim.current_time])
-            total_duration = last_completion
-            high_prio = [j.waiting_time for j in c_jobs if j.priority >= 7]
-            low_prio = [j.waiting_time for j in c_jobs if j.priority < 7]
-            mean_high_prio_wait = float(np.mean(high_prio)) if high_prio else 0.0
-            mean_low_prio_wait = float(np.mean(low_prio)) if low_prio else 0.0
-        else:
-            mean_jct = 0.0
-            mean_slowdown = 1.0
-            p95_slowdown = 1.0
-            jains_fairness = 1.0
-            mean_waiting = 0.0
-            mean_high_prio_wait = 0.0
-            mean_low_prio_wait = 0.0
-            deadline_miss_pct = 0.0
-            total_duration = sim.current_time
-
-        duration = max(1.0, total_duration)
-        total_cluster_gpus = sim.cluster.total_gpus
-        if total_cluster_gpus > 0:
-            avg_gpu_util = (sim.integrated_busy_gpu_seconds / (total_cluster_gpus * duration)) * 100.0
-            avg_gpu_util = min(100.0, max(0.0, avg_gpu_util))
-        else:
-            avg_gpu_util = 0.0
-
-        return {
-            "completed": c_count,
-            "mean_jct": round(mean_jct, 1),
-            "mean_turnaround": round(mean_jct, 1),
-            "mean_slowdown": round(mean_slowdown, 2),
-            "p95_slowdown": round(p95_slowdown, 2),
-            "jains_fairness": round(jains_fairness, 3),
-            "mean_waiting": round(mean_waiting, 1),
-            "high_prio_wait": round(mean_high_prio_wait, 1),
-            "low_prio_wait": round(mean_low_prio_wait, 1),
-            "gpu_util_pct": round(avg_gpu_util, 1),
-            "deadline_miss_pct": round(deadline_miss_pct, 1),
-            "sla_compliance_pct": round(100.0 - deadline_miss_pct, 1),
-            "makespan": round(total_duration, 1),
-        }
-
-    def _compute_benchmark_summary(self) -> List[Dict[str, Any]]:
-        """Calculate academic metrics across PPO and all 4 baselines."""
-        all_metrics = []
-
-        # 1. PPO Metrics
-        ppo_m = self._extract_sim_metrics(self.simulator)
-        all_metrics.append({
-            "policy": "PPO (Reinforcement Learning)",
-            "short_name": "PPO",
-            "is_rl": True,
-            **ppo_m,
-        })
-
-        # 2. Baseline Metrics
-        for b_name in ["FIFO", "SJF", "SJF_Backfill", "Priority", "Priority_BestFit", "BestFit"]:
-            if b_name in self.baseline_sims:
-                b_m = self._extract_sim_metrics(self.baseline_sims[b_name])
-                all_metrics.append({
-                    "policy": b_name,
-                    "short_name": b_name,
-                    "is_rl": False,
-                    **b_m,
-                })
-
-        # Compute relative Pareto Efficiency Score (0 - 100)
-        # Weights: 35% SLA Compliance + 30% Effective GPU Util + 20% Low Slowdown + 15% Makespan
-        min_makespan = min((m["makespan"] for m in all_metrics if m["makespan"] > 0), default=1.0) or 1.0
-        for m in all_metrics:
-            sla_score = m["sla_compliance_pct"]
-            util_score = m["gpu_util_pct"]
-            slowdown_score = max(0.0, 100.0 * (1.0 - ((m["mean_slowdown"] - 1.0) / 4.0)))
-            makespan_score = min(100.0, (min_makespan / max(1.0, m["makespan"])) * 100.0)
-            composite = (sla_score * 0.35) + (util_score * 0.30) + (slowdown_score * 0.20) + (makespan_score * 0.15)
-            m["efficiency_score"] = round(composite, 1)
-
-        return all_metrics
 
     def get_status(self) -> ClusterStatusResponse:
         """Construct full diagnostic state payload."""

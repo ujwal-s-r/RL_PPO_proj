@@ -64,6 +64,14 @@ python scripts/evaluate.py --checkpoint checkpoints/ppo_final.pt --test-seeds 50
 ```
 Or open [`notebooks/06_final_evaluation.ipynb`](notebooks/06_final_evaluation.ipynb).
 
+### Deploy To Vercel
+
+The repository includes a Vercel ASGI entry point at `api/index.py` and a `vercel.json` rewrite so FastAPI serves both the dashboard and API routes. Install the runtime locally with `pip install -r requirements.txt`, then run the dashboard with `uvicorn api.app:app --host 0.0.0.0 --port 8000`.
+
+Before a Git-based Vercel deployment, add the trained model artifact with `git add checkpoints/ppo_final.pt`; the `.gitignore` intentionally includes this final checkpoint while excluding intermediate training checkpoints.
+
+The live simulator keeps mutable state in memory. That is reliable under local Uvicorn, but Vercel functions may run on different instances between requests. For a multi-user production deployment, persist the simulator/session state in an external store before relying on live run continuity.
+
 ---
 
 ## 📁 Repository Structure

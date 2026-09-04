@@ -945,6 +945,138 @@
             color: #a1a1aa;
             line-height: 1.6;
         }
+
+        .benchmark-launch-row {
+            position: absolute;
+            top: 28px;
+            right: 0;
+        }
+
+        .benchmark-modal-card {
+            max-width: 1240px;
+            max-height: calc(100vh - 48px);
+        }
+
+        .benchmark-content {
+            overflow-y: auto;
+            padding-right: 4px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .benchmark-context {
+            border: 1px solid var(--border-light);
+            background: linear-gradient(135deg, #111114, #08080a);
+            border-radius: 9px;
+            padding: 14px 16px;
+            color: var(--text-muted);
+            font-size: 11px;
+            line-height: 1.65;
+        }
+
+        .benchmark-context strong { color: var(--text-white); }
+
+        .scenario-benchmark-card {
+            border: 1px solid var(--border);
+            background: #0d0d0f;
+            border-radius: 9px;
+            padding: 18px;
+        }
+
+        .scenario-benchmark-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            align-items: baseline;
+            margin-bottom: 14px;
+        }
+
+        .scenario-benchmark-title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .scenario-benchmark-description {
+            color: var(--text-muted);
+            font-size: 11px;
+            max-width: 680px;
+            line-height: 1.5;
+        }
+
+        .benchmark-table-wrap { overflow-x: auto; }
+
+        .benchmark-table { min-width: 620px; }
+
+        .benchmark-table .metric-winner { color: #ffffff; font-weight: 800; }
+
+        .benchmark-table tr.row-ppo { background: rgba(255, 255, 255, 0.08); }
+
+        .benchmark-charts {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        .benchmark-chart {
+            background: #08080a;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            padding: 12px;
+        }
+
+        .benchmark-chart-title {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .benchmark-chart-subtitle { color: var(--text-dim); font-size: 10px; margin-top: -6px; margin-bottom: 12px; }
+        .benchmark-plot {
+            height: 230px;
+            display: flex;
+            align-items: end;
+            gap: 8px;
+            padding: 18px 6px 0;
+            border-bottom: 1px solid var(--border-light);
+            background-image: linear-gradient(to top, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            background-size: 100% 25%;
+        }
+
+        .benchmark-bar-column {
+            height: 100%;
+            flex: 1;
+            min-width: 32px;
+            display: grid;
+            grid-template-rows: 20px 1fr 32px;
+            align-items: end;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .benchmark-bar-value { color: var(--text-muted); font-size: 9px; white-space: nowrap; }
+        .benchmark-bar-stack { height: 100%; display: flex; align-items: end; justify-content: center; }
+        .benchmark-bar-fill { width: min(32px, 70%); min-height: 4px; background: #57575d; border-radius: 4px 4px 0 0; transition: height 0.45s ease; }
+        .benchmark-bar-fill.ppo { background: #ffffff; box-shadow: 0 0 16px rgba(255, 255, 255, 0.3); }
+        .benchmark-bar-label { color: var(--text-dim); font-size: 8px; line-height: 1.25; overflow-wrap: anywhere; padding-top: 7px; }
+        .benchmark-bar-column.ppo .benchmark-bar-label { color: var(--text-white); font-weight: 800; }
+
+        .ppo-summary-card { max-width: 780px; }
+        .ppo-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .ppo-stat { background: #0f0f12; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+        .ppo-stat-label { display: block; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .ppo-stat-value { display: block; color: var(--text-white); font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; margin-top: 6px; }
+
+        @media (max-width: 760px) {
+            .benchmark-charts { grid-template-columns: 1fr; }
+            .scenario-benchmark-header { display: block; }
+            .scenario-benchmark-description { margin-top: 6px; }
+            .benchmark-launch-row { top: 16px; right: 0; }
+            .ppo-summary-grid { grid-template-columns: repeat(2, 1fr); }
+        }
     </style>
 </head>
 <body>
@@ -954,6 +1086,9 @@
             <div class="title-text">Configure the number of Nodes</div>
             <div class="bubbles-row" id="bubbles-row">
                 <!-- 1 to 8 bubbles -->
+            </div>
+            <div class="benchmark-launch-row">
+                <button class="btn-outline-white btn-open-benchmarks">📊 Benchmarks</button>
             </div>
         </div>
 
@@ -977,7 +1112,6 @@
                 <button class="btn-white" id="btn-sim-step">Step (Space)</button>
                 <button class="btn-outline-white" id="btn-sim-auto">Auto-Play ▶</button>
                 <button class="btn-outline-white" id="btn-sim-fast" style="border-color: #38bdf8; color: #38bdf8;">Fast Complete ⚡</button>
-                <button class="btn-outline-white" id="btn-view-metrics">Final Comparison 📊</button>
             </div>
         </div>
 
@@ -1102,41 +1236,32 @@
         </div>
     </div>
 
-    <!-- ================= FINAL COMPARISON MODAL ================= -->
-    <div class="modal-overlay" id="metrics-modal">
-        <div class="modal-card">
+    <!-- ================= HELD-OUT BENCHMARK MODAL ================= -->
+    <div class="modal-overlay" id="benchmark-modal">
+        <div class="modal-card benchmark-modal-card">
             <div class="modal-header">
                 <div>
-                    <span class="modal-title">Multi-Objective Benchmark & SLA Comparison</span>
+                    <span class="modal-title">Held-Out Benchmark Results</span>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
-                        Full workload completion benchmark evaluating SLA compliance, urgent model wait times, and hardware utilization.
+                        PPO and classical schedulers evaluated on identical workload traces across six scenarios.
                     </div>
                 </div>
-                <button class="btn-close-modal" id="btn-close-modal">✕</button>
+                <button class="btn-close-modal" id="btn-close-benchmark">✕</button>
             </div>
-            <div style="overflow-x: auto;">
-                <table class="diff-table">
-                    <thead>
-                        <tr>
-                            <th>Scheduling Method</th>
-                            <th>Tasks Finished</th>
-                            <th>SLA Compliance (%)</th>
-                            <th>Mean JCT / Slowdown</th>
-                            <th>Total Makespan (s)</th>
-                            <th>GPU Util (%)</th>
-                            <th>Pareto Score</th>
-                        </tr>
-                    </thead>
-                    <tbody id="diff-table-body">
-                        <!-- Dynamic Comparison Rows -->
-                    </tbody>
-                </table>
+            <div class="benchmark-content" id="benchmark-content"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="ppo-summary-modal">
+        <div class="modal-card ppo-summary-card">
+            <div class="modal-header">
+                <div>
+                    <span class="modal-title">PPO Run Complete</span>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Metrics from this live PPO simulation only.</div>
+                </div>
+                <button class="btn-close-modal" id="btn-close-ppo-summary">✕</button>
             </div>
-            <div class="modal-insight-card">
-                <strong>💡 Multi-Objective Pareto Analysis:</strong><br>
-                Heuristics blindly optimize one metric at the expense of others (e.g. SJF starves Tier-1 training models; Priority wastes GPU VRAM). 
-                <strong>PPO (RL)</strong> achieves the highest overall Pareto efficiency by prioritizing critical production tasks to protect strict SLAs while backfilling short gap tasks to maximize hardware utilization.
-            </div>
+            <div class="ppo-summary-grid" id="ppo-summary-grid"></div>
         </div>
     </div>
 
@@ -1151,7 +1276,7 @@
         let isAutoPlaying = false;
         let isSteppingInProgress = false;
         let autoPlayTimer = null;
-        let latestBenchmarkSummary = [];
+        let benchmarkData = null;
 
         let totalWorkloadJobs = 60;
         let completedJobsCount = 0;
@@ -1189,10 +1314,12 @@
         const btnSimStep = document.getElementById("btn-sim-step");
         const btnSimAuto = document.getElementById("btn-sim-auto");
         const btnSimFast = document.getElementById("btn-sim-fast");
-        const btnViewMetrics = document.getElementById("btn-view-metrics");
-        const metricsModal = document.getElementById("metrics-modal");
-        const btnCloseModal = document.getElementById("btn-close-modal");
-        const diffTableBody = document.getElementById("diff-table-body");
+        const benchmarkModal = document.getElementById("benchmark-modal");
+        const btnCloseBenchmark = document.getElementById("btn-close-benchmark");
+        const benchmarkContent = document.getElementById("benchmark-content");
+        const ppoSummaryModal = document.getElementById("ppo-summary-modal");
+        const btnClosePpoSummary = document.getElementById("btn-close-ppo-summary");
+        const ppoSummaryGrid = document.getElementById("ppo-summary-grid");
 
         const inputCardsList = document.getElementById("input-cards-list");
         const inputCountLabel = document.getElementById("input-count-label");
@@ -1524,11 +1651,10 @@
             btnSimStep.disabled = true;
 
             try {
-                const res = await fetch("/api/simulation/benchmark_step", { method: "POST" });
+                const res = await fetch("/api/simulation/step", { method: "POST" });
                 if (!res.ok) throw new Error("Step failed: " + res.status);
                 const result = await res.json();
 
-                latestBenchmarkSummary = result.benchmark_summary || [];
                 simClockBadge.textContent = `SIM TIME: ${result.sim_time.toFixed(1)}s`;
 
                 totalWorkloadJobs = result.total_scenario_jobs || 60;
@@ -1544,7 +1670,7 @@
 
                 if (result.is_done && remainingJobsCount === 0) {
                     if (isAutoPlaying) toggleAutoPlay();
-                    openMetricsModal();
+                    openPpoSummary(result);
                 }
             } catch (err) {
                 console.error("Step error:", err);
@@ -1625,7 +1751,6 @@
                 if (!res.ok) throw new Error("Fast forward failed: " + res.status);
                 const result = await res.json();
 
-                latestBenchmarkSummary = result.benchmark_summary || [];
                 simClockBadge.textContent = `SIM TIME: ${result.sim_time.toFixed(1)}s`;
 
                 totalWorkloadJobs = result.total_scenario_jobs || 60;
@@ -1639,7 +1764,8 @@
                 renderPipelineBuffers(result.cluster_status.queue, result.completed_history || []);
                 renderNodes(result.cluster_status.nodes);
 
-                openMetricsModal();
+                if (result.is_done && remainingJobsCount === 0) openPpoSummary(result);
+
             } catch (err) {
                 console.error("Fast forward error:", err);
             } finally {
@@ -1665,41 +1791,121 @@
             }
         }
 
-        // ================= 7. FINAL COMPARISON METRICS MODAL =================
-        function openMetricsModal() {
-            diffTableBody.innerHTML = "";
-            if (latestBenchmarkSummary.length === 0) {
-                diffTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Run simulation steps to generate benchmark comparisons.</td></tr>`;
-            } else {
-                latestBenchmarkSummary.forEach(m => {
-                    const row = document.createElement("tr");
-                    if (m.is_rl) row.className = "row-ppo";
-                    row.innerHTML = `
-                        <td>${m.policy} ${m.is_rl ? '<span class="tag-winner">PPO AGENT</span>' : ''}</td>
-                        <td>${m.completed} / ${totalWorkloadJobs} (${Math.round((m.completed / Math.max(1, totalWorkloadJobs)) * 100)}%)</td>
-                        <td><span class="${m.sla_compliance_pct >= 75 ? 'badge-sla-good' : ''}">${m.sla_compliance_pct ? m.sla_compliance_pct.toFixed(1) : (100.0 - m.deadline_miss_pct).toFixed(1)}%</span></td>
-                        <td><strong>${m.mean_jct !== undefined ? m.mean_jct.toFixed(0) + 's' : m.mean_turnaround.toFixed(0) + 's'}</strong> <span style="font-size: 11px; color: #a1a1aa;">(${m.mean_slowdown !== undefined ? m.mean_slowdown.toFixed(2) + 'x' : '1.0x'})</span></td>
-                        <td>${m.makespan.toFixed(1)}s</td>
-                        <td>${m.gpu_util_pct.toFixed(1)}%</td>
-                        <td><strong style="color: #ffffff;">${m.efficiency_score !== undefined ? m.efficiency_score.toFixed(1) : '94.2'}</strong></td>
-                    `;
-                    diffTableBody.appendChild(row);
-                });
-            }
-            metricsModal.classList.add("open");
+        // ================= 7. HELD-OUT BENCHMARK EXPLORER =================
+        const benchmarkPolicies = ["PPO", "SJF_Backfill", "Priority_BestFit", "SJF", "Priority", "BestFit", "FIFO"];
+        const policyLabels = {
+            PPO: "PPO", SJF_Backfill: "SJF Backfill", Priority_BestFit: "Priority + Best Fit",
+            SJF: "SJF", Priority: "Priority", BestFit: "Best Fit", FIFO: "FIFO",
+        };
+
+        function metricMean(results, policy, scenario, metric) {
+            return results[policy][scenario][metric].mean;
         }
 
-        function closeMetricsModal() {
-            metricsModal.classList.remove("open");
+        function makeBenchmarkChart(results, scenario, metric, title, formatter, higherIsBetter) {
+            const values = benchmarkPolicies.map(policy => ({
+                policy,
+                value: higherIsBetter
+                    ? 1 - metricMean(results, policy, scenario, metric)
+                    : metricMean(results, policy, scenario, metric),
+            }));
+            const maxValue = Math.max(...values.map(item => item.value), 0.0001);
+            return `
+                <div class="benchmark-chart">
+                    <div class="benchmark-chart-title">${title}</div>
+                    <div class="benchmark-chart-subtitle">${higherIsBetter ? "Higher is better" : "Lower is better"}</div>
+                    <div class="benchmark-plot">
+                    ${values.map(({ policy, value }) => {
+                        const displayValue = higherIsBetter ? value * 100 : value;
+                        const height = Math.max(3, (value / maxValue) * 100);
+                        return `<div class="benchmark-bar-column ${policy === 'PPO' ? 'ppo' : ''}">
+                            <span class="benchmark-bar-value">${formatter(displayValue)}</span>
+                            <span class="benchmark-bar-stack"><span class="benchmark-bar-fill ${policy === 'PPO' ? 'ppo' : ''}" style="height:${height}%"></span></span>
+                            <span class="benchmark-bar-label">${policyLabels[policy]}</span>
+                        </div>`;
+                    }).join("")}</div>
+                </div>`;
         }
+
+        function renderBenchmarkExplorer(data) {
+            const { results, descriptions, evaluation_seeds: seeds } = data;
+            const scenarios = ["balanced", "training_heavy", "short_job_heavy", "bursty", "gpu_fragmentation", "high_load"];
+            benchmarkContent.innerHTML = `
+                <div class="benchmark-context"><strong>Controlled evaluation:</strong> every method received identical job traces on unseen seeds ${seeds.join(", ")}. Mean JCT is lower-is-better; SLA compliance is higher-is-better. Live simulation uses only PPO and is not mixed into these results.</div>
+                ${scenarios.map(scenario => {
+                    const jctValues = benchmarkPolicies.map(policy => metricMean(results, policy, scenario, "mean_jct"));
+                    const slaValues = benchmarkPolicies.map(policy => 1 - metricMean(results, policy, scenario, "deadline_violation_rate"));
+                    const bestJct = Math.min(...jctValues);
+                    const bestSla = Math.max(...slaValues);
+                    const title = scenario.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
+                    return `<section class="scenario-benchmark-card">
+                        <div class="scenario-benchmark-header">
+                            <span class="scenario-benchmark-title">${title}</span>
+                            <span class="scenario-benchmark-description">${descriptions[scenario]}</span>
+                        </div>
+                        <div class="benchmark-table-wrap"><table class="diff-table benchmark-table">
+                            <thead><tr><th>Method</th><th>Mean JCT</th><th>SLA Compliance</th></tr></thead>
+                            <tbody>${benchmarkPolicies.map((policy, index) => {
+                                const jct = jctValues[index];
+                                const sla = slaValues[index] * 100;
+                                return `<tr class="${policy === 'PPO' ? 'row-ppo' : ''}">
+                                    <td>${policyLabels[policy]} ${policy === 'PPO' ? '<span class="tag-winner">PPO</span>' : ''}</td>
+                                    <td class="${jct === bestJct ? 'metric-winner' : ''}">${jct.toFixed(1)}s</td>
+                                    <td class="${slaValues[index] === bestSla ? 'metric-winner' : ''}">${sla.toFixed(2)}%</td>
+                                </tr>`;
+                            }).join("")}</tbody>
+                        </table></div>
+                        <div class="benchmark-charts">
+                            ${makeBenchmarkChart(results, scenario, "mean_jct", "Mean JCT", value => `${value.toFixed(0)}s`, false)}
+                            ${makeBenchmarkChart(results, scenario, "deadline_violation_rate", "SLA Compliance", value => `${value.toFixed(1)}%`, true)}
+                        </div>
+                    </section>`;
+                }).join("")}`;
+        }
+
+        async function openBenchmarkModal() {
+            benchmarkModal.classList.add("open");
+            if (benchmarkData) return;
+            benchmarkContent.innerHTML = `<div class="benchmark-context">Loading held-out benchmark data...</div>`;
+            try {
+                const res = await fetch("/api/benchmarks");
+                if (!res.ok) throw new Error(`Benchmark request failed: ${res.status}`);
+                benchmarkData = await res.json();
+                renderBenchmarkExplorer(benchmarkData);
+            } catch (err) {
+                benchmarkContent.innerHTML = `<div class="benchmark-context">Benchmark data could not be loaded. Check that the API server can access <strong>evaluation/final_benchmark_results.md</strong>.</div>`;
+                console.error("Benchmark load error:", err);
+            }
+        }
+
+        function closeBenchmarkModal() { benchmarkModal.classList.remove("open"); }
+
+        function openPpoSummary(result) {
+            const metrics = result.cluster_status.metrics || {};
+            const sla = (metrics.sla_compliance_rate ?? 0) * 100;
+            const stats = [
+                ["Completed", `${metrics.completed_jobs ?? completedJobsCount} / ${result.total_scenario_jobs ?? totalWorkloadJobs}`],
+                ["Mean JCT", `${(metrics.mean_jct ?? 0).toFixed(1)}s`],
+                ["P95 JCT", `${(metrics.p95_jct ?? 0).toFixed(1)}s`],
+                ["Queue Wait", `${(metrics.mean_wait_time ?? 0).toFixed(1)}s`],
+                ["GPU Utilization", `${((metrics.gpu_utilization ?? 0) * 100).toFixed(1)}%`],
+                ["SLA Compliance", `${sla.toFixed(1)}%`],
+            ];
+            ppoSummaryGrid.innerHTML = stats.map(([label, value]) => `<div class="ppo-stat"><span class="ppo-stat-label">${label}</span><span class="ppo-stat-value">${value}</span></div>`).join("");
+            ppoSummaryModal.classList.add("open");
+        }
+
+        function closePpoSummary() { ppoSummaryModal.classList.remove("open"); }
 
         // ================= EVENT LISTENERS =================
         btnSimStep.addEventListener("click", stepSimulation);
         btnSimAuto.addEventListener("click", toggleAutoPlay);
         btnSimFast.addEventListener("click", fastForwardSimulation);
-        btnViewMetrics.addEventListener("click", openMetricsModal);
-        btnCloseModal.addEventListener("click", closeMetricsModal);
-        metricsModal.addEventListener("click", (e) => { if (e.target === metricsModal) closeMetricsModal(); });
+        document.querySelectorAll(".btn-open-benchmarks").forEach(button => button.addEventListener("click", openBenchmarkModal));
+        btnCloseBenchmark.addEventListener("click", closeBenchmarkModal);
+        benchmarkModal.addEventListener("click", (e) => { if (e.target === benchmarkModal) closeBenchmarkModal(); });
+        btnClosePpoSummary.addEventListener("click", closePpoSummary);
+        ppoSummaryModal.addEventListener("click", (e) => { if (e.target === ppoSummaryModal) closePpoSummary(); });
 
         window.addEventListener("keydown", (e) => {
             if (e.code === "Space" && currentPhase === 3 && e.target === document.body) {

@@ -17,8 +17,7 @@ def test_api_policies_and_scenarios(client=None):
     c = client or TestClient(app)
     res_pol = c.get("/api/policies")
     assert res_pol.status_code == 200
-    assert "PPO" in res_pol.json()["policies"]
-    assert "FIFO" in res_pol.json()["policies"]
+    assert res_pol.json()["policies"] == ["PPO"]
 
     res_sc = c.get("/api/scenarios")
     assert res_sc.status_code == 200
@@ -61,12 +60,23 @@ def test_api_schedule_step_ppo(client=None):
         "policy": "PPO",
         "auto_advance": True,
     }
-    res = c.post("/api/schedule/step", json=step_payload)
+    res = c.post("/api/simulation/step", json=step_payload)
     assert res.status_code == 200
     data = res.json()
     assert "policy" in data
     assert data["policy"] == "PPO"
     assert "sim_time" in data
+
+
+def test_api_benchmarks(client=None):
+    c = client or TestClient(app)
+    res = c.get("/api/benchmarks")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["evaluation_seeds"] == [501, 602, 703]
+    assert "balanced" in data["descriptions"]
+    assert "PPO" in data["results"]
+    assert "SJF_Backfill" in data["results"]
 
 
 def test_api_cluster_reset(client=None):
