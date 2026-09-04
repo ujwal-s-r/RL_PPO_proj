@@ -3,12 +3,11 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import os
-import torch
 
 from simulator.cluster import Cluster
 from simulator.simulator import Simulator
 from simulator.job import Job, WorkloadType
-from evaluation.ppo_policy import PPOPolicyScheduler
+from evaluation.onnx_policy import ONNXPolicyScheduler
 from workloads.scenarios import create_scenario_workload, list_scenarios
 from api.schemas import (
     ClusterStatusResponse,
@@ -25,7 +24,7 @@ class ClusterServiceManager:
     def __init__(
         self,
         cluster_config: str = "configs/cluster_small.yaml",
-        checkpoint_path: str = "checkpoints/ppo_final.pt",
+        checkpoint_path: str = "checkpoints/ppo_final.onnx",
         default_scenario: str = "balanced",
     ) -> None:
         self.cluster_config = cluster_config
@@ -39,7 +38,7 @@ class ClusterServiceManager:
 
         # Live simulation is PPO-only. Baselines remain available in offline evaluation.
         self.policies = {
-            "PPO": PPOPolicyScheduler(
+            "PPO": ONNXPolicyScheduler(
                 checkpoint_path=checkpoint_path,
                 cluster_config_path=cluster_config,
             ),
