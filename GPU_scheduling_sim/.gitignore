@@ -28,13 +28,14 @@ ENV/
 
 # Checkpoints / runs / data
 checkpoints/*
-!checkpoints/ppo_final.pt
+!checkpoints/ppo_final.onnx
 logs/
 results/
 data/
 *.pt
 *.pth
-!checkpoints/ppo_final.pt
+*.onnx
+!checkpoints/ppo_final.onnx
 
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
