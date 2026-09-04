@@ -16,19 +16,30 @@ dependencies = [
     "fastapi>=0.100.0",
     "uvicorn>=0.22.0",
     "pyyaml>=6.0",
-    "matplotlib>=3.7.0",
-    "pandas>=2.0.0",
-    "tqdm>=4.65.0",
-    "pytest>=7.3.0",
 ]
 
 [project.optional-dependencies]
+analysis = [
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "tqdm>=4.65.0",
+]
 dev = [
     "pytest>=7.3.0",
     "black>=23.0.0",
     "ruff>=0.0.280",
     "ipykernel>=6.25.0",
 ]
+
+# Vercel uses uv and must never resolve the CUDA-enabled PyTorch distribution.
+# Training can still use a local CUDA build; deployment performs inference on CPU.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.setuptools.packages.find]
 where = ["."]
