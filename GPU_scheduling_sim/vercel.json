@@ -1,8 +1,10 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "functions": {
     "api/index.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": "{api/**,baselines/**,env/**,evaluation/**,simulator/**,workloads/**,configs/**,frontend/**,checkpoints/ppo_final.onnx}"
     }
   }
 }
